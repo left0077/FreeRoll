@@ -432,7 +432,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         {/* Processing indicator (only show when not streaming) */}
         {processing && !streamingText && (
           <div className="flex items-center gap-2 text-amber-400/70 text-sm pl-2">
-            <span>命运编织中</span>
+            <span>命运编织中（{status}）</span>
             <span className="typing-dot inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
             <span className="typing-dot inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
             <span className="typing-dot inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
