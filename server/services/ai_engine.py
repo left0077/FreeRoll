@@ -64,20 +64,21 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。
 
 ## 核心规则
 1. 掷骰必须调用 roll_dice 函数——绝不在叙事中写骰子结果
-2. 数值/物品/状态变化写在 <system> 块里——绝不在叙事中写"HP:15→12"
-3. 叙事只写故事描述，不写任何游戏机制
-4. 每次回复必须以叙事开头，以 </system> 结尾
+2. 数值变化写在 <controls> 块里——绝不在叙事中写"HP:15→12"
+3. 叙事只写故事，不写任何游戏机制
 
 ## 输出格式
-叙事文本（纯故事，无游戏术语）
-<system>
+<response>
+<narrative>纯故事文本，2-4段，用角色名而非你/我。禁止出现骰子、HP、状态标记等游戏术语。</narrative>
+<controls>
 <next>下一个行动的角色名</next>
-<actions>行动建议1|行动建议2|行动建议3</actions>
-<bar character="角色名" name="HP" delta="-3"/>  <!-- 如有受伤/治疗 -->
-<item character="角色名" action="add">物品名</item>  <!-- 如有获得物品 -->
-<status character="角色名" action="add">状态名</status>  <!-- 如有新增状态 -->
-<note category="npc">内容</note>  <!-- 如有新发现，category=npc/location/clue/event -->
-</system>
+<actions>建议1|建议2|建议3</actions>
+<bar character="角色名" name="HP" delta="-3"/>
+<item character="角色名" action="add">物品名</item>
+<status character="角色名" action="add">状态名</status>
+<note category="npc">内容</note>
+</controls>
+</response>
 
 ## 回合规则
 - 指定下一个行动的玩家，每个玩家都有参与机会
@@ -296,14 +297,26 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
 
 
 def _parse_mixed_response(text: str, result: dict):
-    """Split on <system>: narrative before, XML controls after."""
-    if "<system>" in text:
-        parts = text.split("<system>", 1)
-        narrative_text = parts[0].strip()
-        control_text = parts[1].strip() if len(parts) > 1 else ""
-    else:
-        narrative_text = text.strip()
-        control_text = ""
+    """Extract <narrative> for players, <controls> for system."""
+    narrative_text = ""
+    control_text = ""
+
+    m = re.search(r'<narrative>(.+?)</narrative>', text, re.DOTALL)
+    if m:
+        narrative_text = m.group(1).strip()
+
+    m = re.search(r'<controls>(.+?)</controls>', text, re.DOTALL)
+    if m:
+        control_text = m.group(1).strip()
+
+    if not narrative_text and not control_text:
+        # Fallback: old format
+        if "<system>" in text:
+            parts = text.split("<system>", 1)
+            narrative_text = parts[0].strip()
+            control_text = parts[1].strip() if len(parts) > 1 else ""
+        else:
+            narrative_text = text.strip()
 
     # Parse XML controls
     if control_text:

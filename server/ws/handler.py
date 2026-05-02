@@ -185,17 +185,30 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — buffer to detect <system> tag
+    # Process through AI with streaming — only stream text inside <narrative> tag
     _buf = ""
+    _in_narrative = False
 
     async def on_chunk(text: str):
-        nonlocal _buf
+        nonlocal _buf, _in_narrative
         combined = _buf + text
-        if "<system>" in combined:
-            before = combined.split("<system>", 1)[0]
+
+        if not _in_narrative:
+            if "<narrative>" in combined:
+                _, after = combined.split("<narrative>", 1)
+                _in_narrative = True
+                combined = after
+                _buf = ""
+            else:
+                _buf = combined[-20:]  # Keep last 20 chars to detect <narrative>
+                return
+
+        if "</narrative>" in combined:
+            before = combined.split("</narrative>", 1)[0]
             if before:
                 await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": before, "turn_number": room["turn_number"]}})
-            _buf = "<system>"  # Sentinel
+            _in_narrative = False
+            _buf = ""
         else:
             if len(combined) > 8:
                 await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": combined[:-8], "turn_number": room["turn_number"]}})
