@@ -281,9 +281,8 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
         import traceback; traceback.print_exc()
         narrative2, _, _ = await _normal_call(messages)
 
-    full_narrative = (narrative or "") + (narrative2 or "")
-
-    # Parse markers
+    # Use only the second call's output — the final narrative after tool results
+    # Don't concatenate with first call which may have XML tags mixed in
     result = {
         "narrative": "",
         "state_changes": prev_result.get("state_changes", []),
@@ -291,8 +290,7 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
         "ending_suggested": None,
         "suggested_actions": [],
     }
-
-    _parse_mixed_response(full_narrative, result)
+    _parse_mixed_response(narrative2 or "", result)
     return result
 
 
