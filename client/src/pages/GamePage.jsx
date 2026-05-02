@@ -93,6 +93,12 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
     }
 
     switch (type) {
+      case "player_action_broadcast":
+        // Show other players' actions in chat (own action already added locally)
+        if (payload.player_id !== playerId) {
+          setMessages((prev) => [...prev, { id: payload.id || Date.now(), type: "action", content: payload.content, player_id: payload.player_id, turn_number: payload.turn_number }]);
+        }
+        break;
       case "gm_narrative_chunk":
         setStreamingText((prev) => prev + payload.content);
         break;

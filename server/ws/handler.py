@@ -155,8 +155,12 @@ async def _handle_action(room, player, payload):
         "payload": {"player_id": player.id, "nickname": player.nickname, "is_typing": False},
     })
 
-    # Save action message and snapshot BEFORE AI call
-    add_message(code, player.id, "action", content)
+    # Save action message and broadcast to all players
+    msg = add_message(code, player.id, "action", content)
+    await _broadcast(code, {
+        "type": "player_action_broadcast",
+        "payload": {"id": msg["id"], "player_id": player.id, "content": content, "turn_number": room["turn_number"]},
+    })
     save_snapshot(code)
 
     # Process through AI
