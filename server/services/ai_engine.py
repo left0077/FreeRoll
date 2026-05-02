@@ -92,13 +92,21 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。你的职责�
 控制标记（玩家不可见）
 
 例如：
-走廊深处传来低沉的嘶吼，火把的光芒在石壁上投下不安的阴影。金鬃王握紧了长剑。
+走廊深处传来低沉的嘶吼，石壁上投下不安的阴影。金鬃王握紧长剑，手臂上被石像鬼抓出的伤口还在渗血。
 [SYSTEM]
 [NEXT:金鬃王]
-[ACTIONS:举火把谨慎向前探查声音来源|退后到岔路口选择另一条路|大声喊话试探黑暗中是什么生物]
-[NOTE:location:地下城第二层，走廊尽头有不明生物]
+[ACTIONS:举火把谨慎向前探查|退后到岔路口选择另一条路|包扎手臂上的伤口]
+[BAR:金鬃王:HP:-3]
+[NOTE:location:地下城第二层，有石像鬼出没]
 
-注意：[SYSTEM] 前面的叙事部分是玩家看到的文字。[SYSTEM] 后面的标记是系统指令，玩家不可见。
+状态变化标记格式（在 [SYSTEM] 块中使用）：
+- [BAR:角色名:数值条名:变化量]  例：[BAR:金鬃王:HP:-5] [BAR:艾林:SAN:-10]
+- [ITEM:角色名:+:物品名]  例：[ITEM:金鬃王:+:生锈的钥匙]
+- [ITEM:角色名:-:物品名]  例：[ITEM:金鬃王:-:治疗药水]
+- [STATUS:角色名:+:状态名]  例：[STATUS:金鬃王:+:中毒]
+- [STATUS:角色名:-:状态名]  例：[STATUS:金鬃王:-:中毒]
+
+注意：[SYSTEM] 前面的叙事部分是玩家看到的文字。[SYSTEM] 后面的标记是系统指令。
 不要在叙事中使用 [SYSTEM] 这个词。
 
 ## 回合管理
@@ -359,6 +367,43 @@ def _parse_mixed_response(text: str, result: dict):
                 if not any(d.get("content") == t.strip() for d in existing):
                     existing.append({"category": c, "content": t.strip()})
             result["world_notes"] = existing
+
+        # Parse state changes from control markers
+        for bar_match in re.finditer(r'\[BAR:([^:]+):([^:]+):([+-]?\d+)\]', source):
+            delta = int(bar_match.group(3))
+            existing_sc = next((s for s in result.get("state_changes", []) if s["character_name"] == bar_match.group(1)), None)
+            if existing_sc:
+                existing_sc.setdefault("bar_delta", {})[bar_match.group(2)] = existing_sc.get("bar_delta", {}).get(bar_match.group(2), 0) + delta
+            else:
+                result.setdefault("state_changes", []).append({
+                    "character_name": bar_match.group(1),
+                    "bar_delta": {bar_match.group(2): delta},
+                    "narrative": "",
+                })
+
+        for item_match in re.finditer(r'\[ITEM:([^:]+):([+-]):(.+?)\]', source):
+            name, op, item = item_match.group(1), item_match.group(2), item_match.group(3).strip()
+            existing_sc = next((s for s in result.get("state_changes", []) if s["character_name"] == name), None)
+            if existing_sc:
+                if op == "+": existing_sc.setdefault("add_item", item)
+                else: existing_sc.setdefault("remove_item", item)
+            else:
+                sc = {"character_name": name, "narrative": ""}
+                if op == "+": sc["add_item"] = item
+                else: sc["remove_item"] = item
+                result.setdefault("state_changes", []).append(sc)
+
+        for status_match in re.finditer(r'\[STATUS:([^:]+):([+-]):(.+?)\]', source):
+            name, op, status = status_match.group(1), status_match.group(2), status_match.group(3).strip()
+            existing_sc = next((s for s in result.get("state_changes", []) if s["character_name"] == name), None)
+            if existing_sc:
+                if op == "+": existing_sc.setdefault("add_status", status)
+                else: existing_sc.setdefault("remove_status", status)
+            else:
+                sc = {"character_name": name, "narrative": ""}
+                if op == "+": sc["add_status"] = status
+                else: sc["remove_status"] = status
+                result.setdefault("state_changes", []).append(sc)
 
     # Clean narrative: strip any remaining inline markers
     if "[SYSTEM]" not in text:
