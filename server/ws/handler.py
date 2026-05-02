@@ -185,19 +185,18 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — buffer last chars to detect [SYSTEM]
+    # Process through AI with streaming — buffer to detect <system> tag
     _buf = ""
 
     async def on_chunk(text: str):
         nonlocal _buf
         combined = _buf + text
-        if "[SYSTEM]" in combined:
-            before = combined.split("[SYSTEM]", 1)[0]
+        if "<system>" in combined:
+            before = combined.split("<system>", 1)[0]
             if before:
                 await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": before, "turn_number": room["turn_number"]}})
-            _buf = "[SYSTEM]"  # Sentinel
+            _buf = "<system>"  # Sentinel
         else:
-            # Send all but keep last 8 chars to catch split [SYSTEM]
             if len(combined) > 8:
                 await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": combined[:-8], "turn_number": room["turn_number"]}})
                 _buf = combined[-8:]

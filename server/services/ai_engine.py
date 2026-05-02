@@ -74,39 +74,34 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。
 - 不要在叙事中写骰子结果、数值变化、状态标记
 
 ## 输出格式
-叙事文本
-[SYSTEM]
-[NEXT:下一个行动的角色名]
-[ACTIONS:建议1|建议2|建议3]
-[BAR:角色名:数值条:变化量] （如有受伤/治疗/数值变化）
-[ITEM:角色名:+/-:物品名] （如有获得/失去物品）
-[STATUS:角色名:+/-:状态名] （如有状态增减）
-[NOTE:分类:内容] （如有新发现）
-[PLOT:编号:名称] （如主线推进）
+叙事文本（玩家看到的故事描述，禁止出现游戏机制）
+<system>
+<next>角色名</next>
+<actions>建议1|建议2|建议3</actions>
+<bar character="角色名" name="HP" delta="-3"/>
+<item character="角色名" action="add">物品名</item>
+<status character="角色名" action="remove">状态名</status>
+<note category="npc">NPC描述</note>
+<plot stage="0">阶段名</plot>
+</system>
 
-[BAR] 示例：
-- 受伤：[BAR:金鬃王:HP:-3]
-- 治疗：[BAR:艾林:HP:5]
-- 理智：[BAR:调查员:SAN:-10]
-- 筹码：[BAR:赌徒:筹码:-200]
+XML 标签说明：
+- <next> — 下一个行动的玩家角色名
+- <actions> — 用 | 分隔的3-4个行动建议
+- <bar> — 数值条变化。character=角色名, name=条名(HP/SAN/好感度等), delta=变化量(正数为治疗/增加，负数为受伤/减少)
+- <item> — 物品变化。action="add"获得或"remove"失去
+- <status> — 状态变化。action="add"新增或"remove"解除
+- <note> — 新发现。category=npc/location/clue/event
+- <plot> — 主线推进。stage=阶段编号(0开始)
 
-例如：
-走廊深处传来低沉的嘶吼，石壁上投下不安的阴影。金鬃王握紧长剑，手臂上被石像鬼抓出的伤口还在渗血。
-[SYSTEM]
-[NEXT:金鬃王]
-[ACTIONS:举火把谨慎向前探查|退后到岔路口选择另一条路|包扎手臂上的伤口]
-[BAR:金鬃王:HP:-3]
-[NOTE:location:地下城第二层，有石像鬼出没]
-
-状态变化标记格式（在 [SYSTEM] 块中使用）：
-- [BAR:角色名:数值条名:变化量]  例：[BAR:金鬃王:HP:-5] [BAR:艾林:SAN:-10]
-- [ITEM:角色名:+:物品名]  例：[ITEM:金鬃王:+:生锈的钥匙]
-- [ITEM:角色名:-:物品名]  例：[ITEM:金鬃王:-:治疗药水]
-- [STATUS:角色名:+:状态名]  例：[STATUS:金鬃王:+:中毒]
-- [STATUS:角色名:-:状态名]  例：[STATUS:金鬃王:-:中毒]
-
-注意：[SYSTEM] 前面的叙事部分是玩家看到的文字。[SYSTEM] 后面的标记是系统指令。
-不要在叙事中使用 [SYSTEM] 这个词。
+示例：
+走廊深处传来低沉的嘶吼，金鬃王握紧长剑，手臂上被石像鬼抓出的伤口还在渗血。
+<system>
+<next>金鬃王</next>
+<actions>举火把谨慎向前探查|退后到岔路口|包扎手臂上的伤口</actions>
+<bar character="金鬃王" name="HP" delta="-3"/>
+<note category="location">地下城第二层，有石像鬼出没</note>
+</system>
 
 ## 回合管理
 - 根据故事走向指定下一个行动的玩家
@@ -329,84 +324,79 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
 
 
 def _parse_mixed_response(text: str, result: dict):
-    """Split on [SYSTEM]: narrative before, control markers after."""
-    if "[SYSTEM]" in text:
-        parts = text.split("[SYSTEM]", 1)
+    """Split on <system>: narrative before, XML controls after."""
+    if "<system>" in text:
+        parts = text.split("<system>", 1)
         narrative_text = parts[0].strip()
         control_text = parts[1].strip() if len(parts) > 1 else ""
     else:
         narrative_text = text.strip()
-        control_text = text  # Fallback: parse markers from full text, strip later
+        control_text = ""
 
-    # Parse controls from control_text first, fallback to narrative
-    for source in [control_text, narrative_text]:
-        if result.get("next_player") and result.get("suggested_actions"):
-            break
+    # Parse XML controls
+    if control_text:
+        m = re.search(r'<next>(.+?)</next>', control_text)
+        if m: result["next_player"] = m.group(1).strip()
 
-        m = re.search(r'\[NEXT:(.+?)\]', source)
-        if m and not result.get("next_player"):
-            result["next_player"] = m.group(1).strip()
+        m = re.search(r'<ending>(.+?)</ending>', control_text)
+        if m: result["ending_suggested"] = m.group(1).strip()
 
-        m = re.search(r'\[ENDING:(.+?)\]', source)
-        if m:
-            result["ending_suggested"] = m.group(1).strip()
+        m = re.search(r'<actions>(.+?)</actions>', control_text)
+        if m: result["suggested_actions"] = [a.strip() for a in m.group(1).split("|") if a.strip()]
 
-        m = re.search(r'\[ACTIONS:(.+?)\]', source)
-        if m and not result.get("suggested_actions"):
-            result["suggested_actions"] = [a.strip() for a in m.group(1).split("|") if a.strip()]
+        m = re.search(r'<plot\s+stage="(\d+)">(.+?)</plot>', control_text)
+        if m: result["plot_update"] = {"stage": int(m.group(1)), "name": m.group(2).strip()}
 
-        m = re.search(r'\[PLOT:(\d+):(.+?)\]', source)
-        if m and not result.get("plot_update"):
-            result["plot_update"] = {"stage": int(m.group(1)), "name": m.group(2).strip()}
+        for m in re.finditer(r'<note\s+category="(\w+)">(.+?)</note>', control_text):
+            existing = result.setdefault("world_notes", [])
+            if not any(d.get("content") == m.group(2).strip() for d in existing):
+                existing.append({"category": m.group(1), "content": m.group(2).strip()})
 
-        notes = re.findall(r'\[NOTE:(\w+):(.+?)\]', source)
-        if notes:
-            existing = result.get("world_notes", [])
-            for c, t in notes:
-                if not any(d.get("content") == t.strip() for d in existing):
-                    existing.append({"category": c, "content": t.strip()})
-            result["world_notes"] = existing
-
-        # Parse state changes from control markers
-        for bar_match in re.finditer(r'\[BAR:([^:]+):([^:]+):([+-]?\d+)\]', source):
-            delta = int(bar_match.group(3))
-            existing_sc = next((s for s in result.get("state_changes", []) if s["character_name"] == bar_match.group(1)), None)
+        for m in re.finditer(r'<bar\s+character="([^"]+)"\s+name="([^"]+)"\s+delta="([+-]?\d+)"', control_text):
+            delta = int(m.group(3))
+            existing_sc = next((s for s in result.setdefault("state_changes", []) if s["character_name"] == m.group(1)), None)
             if existing_sc:
-                existing_sc.setdefault("bar_delta", {})[bar_match.group(2)] = existing_sc.get("bar_delta", {}).get(bar_match.group(2), 0) + delta
+                existing_sc.setdefault("bar_delta", {})[m.group(2)] = existing_sc.get("bar_delta", {}).get(m.group(2), 0) + delta
             else:
-                result.setdefault("state_changes", []).append({
-                    "character_name": bar_match.group(1),
-                    "bar_delta": {bar_match.group(2): delta},
-                    "narrative": "",
-                })
+                result["state_changes"].append({"character_name": m.group(1), "bar_delta": {m.group(2): delta}, "narrative": ""})
 
-        for item_match in re.finditer(r'\[ITEM:([^:]+):([+-]):(.+?)\]', source):
-            name, op, item = item_match.group(1), item_match.group(2), item_match.group(3).strip()
-            existing_sc = next((s for s in result.get("state_changes", []) if s["character_name"] == name), None)
+        for m in re.finditer(r'<item\s+character="([^"]+)"\s+action="(add|remove)">(.+?)</item>', control_text):
+            name, action, item = m.group(1), m.group(2), m.group(3).strip()
+            existing_sc = next((s for s in result.setdefault("state_changes", []) if s["character_name"] == name), None)
             if existing_sc:
-                if op == "+": existing_sc.setdefault("add_item", item)
-                else: existing_sc.setdefault("remove_item", item)
+                if action == "add": existing_sc["add_item"] = item
+                else: existing_sc["remove_item"] = item
             else:
                 sc = {"character_name": name, "narrative": ""}
-                if op == "+": sc["add_item"] = item
+                if action == "add": sc["add_item"] = item
                 else: sc["remove_item"] = item
-                result.setdefault("state_changes", []).append(sc)
+                result["state_changes"].append(sc)
 
-        for status_match in re.finditer(r'\[STATUS:([^:]+):([+-]):(.+?)\]', source):
-            name, op, status = status_match.group(1), status_match.group(2), status_match.group(3).strip()
-            existing_sc = next((s for s in result.get("state_changes", []) if s["character_name"] == name), None)
+        for m in re.finditer(r'<status\s+character="([^"]+)"\s+action="(add|remove)">(.+?)</status>', control_text):
+            name, action, status = m.group(1), m.group(2), m.group(3).strip()
+            existing_sc = next((s for s in result.setdefault("state_changes", []) if s["character_name"] == name), None)
             if existing_sc:
-                if op == "+": existing_sc.setdefault("add_status", status)
-                else: existing_sc.setdefault("remove_status", status)
+                if action == "add": existing_sc["add_status"] = status
+                else: existing_sc["remove_status"] = status
             else:
                 sc = {"character_name": name, "narrative": ""}
-                if op == "+": sc["add_status"] = status
+                if action == "add": sc["add_status"] = status
                 else: sc["remove_status"] = status
-                result.setdefault("state_changes", []).append(sc)
+                result["state_changes"].append(sc)
 
-    # Clean narrative: strip any remaining inline markers
-    if "[SYSTEM]" not in text:
-        narrative_text = re.sub(r'\[(?:NEXT|ACTIONS|ENDING|PLOT|NOTE):[^\]]*\]', '', narrative_text).strip()
+    # Fallback: parse old bracket markers from narrative
+    if not result.get("next_player"):
+        for source in [control_text, narrative_text]:
+            m = re.search(r'\[NEXT:(.+?)\]', source)
+            if m: result["next_player"] = m.group(1).strip(); break
+    if not result.get("suggested_actions"):
+        m = re.search(r'\[ACTIONS:(.+?)\]', narrative_text)
+        if m: result["suggested_actions"] = [a.strip() for a in m.group(1).split("|") if a.strip()]
+
+    # Clean narrative
+    if "<system>" not in text:
+        narrative_text = re.sub(r'<(?:next|actions|bar|item|status|note|plot|ending|system)[^>]*>.*?</\1>', '', narrative_text, flags=re.DOTALL).strip()
+        narrative_text = re.sub(r'\[(?:NEXT|ACTIONS|BAR|ITEM|STATUS|NOTE|PLOT|ENDING):[^\]]*\]', '', narrative_text).strip()
 
     result["narrative"] = narrative_text
 
