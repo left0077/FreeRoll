@@ -676,6 +676,33 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
 function MessageBubble({ msg, players, characters }) {
   const player = msg.player_id ? players.find((p) => p.id === msg.player_id) : null;
 
+  // Color helper
+  const CHAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#e11d48", "#6366f1", "#14b8a6"];
+  const getCharColor = (name) => {
+    if (!name) return CHAR_COLORS[0];
+    const idx = [...name].reduce((h, c) => h + c.charCodeAt(0), 0) % CHAR_COLORS.length;
+    return CHAR_COLORS[idx];
+  };
+
+  // Render text with character names highlighted
+  const renderWithNames = (text, baseClass = "text-gray-200") => {
+    if (!text || !characters?.length) return <span className={baseClass}>{text}</span>;
+    const names = characters.map(c => c.name).filter(Boolean).sort((a, b) => b.length - a.length);
+    if (!names.length) return <span className={baseClass}>{text}</span>;
+    const pattern = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const parts = text.split(new RegExp(`(${pattern})`, 'g'));
+    return (
+      <span className={baseClass}>
+        {parts.map((part, i) => {
+          const isName = names.includes(part);
+          return isName
+            ? <span key={i} style={{color: getCharColor(part), fontWeight: 'bold'}}>{part}</span>
+            : <span key={i}>{part}</span>;
+        })}
+      </span>
+    );
+  };
+
   if (msg.type === "narrative") {
     return (
       <div className="pl-3 border-l-2 border-amber-600/50">
@@ -693,6 +720,23 @@ function MessageBubble({ msg, players, characters }) {
               blockquote: ({ children }) => <blockquote className="border-l-2 border-gray-600 pl-3 my-1 text-gray-400 italic">{children}</blockquote>,
               code: ({ children }) => <code className="bg-gray-800 px-1 py-0.5 rounded text-amber-400 text-xs">{children}</code>,
               hr: () => <hr className="border-gray-700 my-2" />,
+              text: ({ value, children }) => {
+                // Highlight character names in text nodes
+                if (typeof value === 'string' && characters?.length) {
+                  const names = characters.map(c => c.name).filter(Boolean).sort((a, b) => b.length - a.length);
+                  if (names.length) {
+                    const pattern = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+                    const parts = value.split(new RegExp(`(${pattern})`, 'g'));
+                    return parts.map((part, i) => {
+                      const isName = names.includes(part);
+                      return isName
+                        ? <span key={i} style={{color: getCharColor(part), fontWeight: 'bold'}}>{part}</span>
+                        : <span key={i}>{part}</span>;
+                    });
+                  }
+                }
+                return children || value;
+              },
             }}
           >
             {msg.content}
@@ -705,10 +749,13 @@ function MessageBubble({ msg, players, characters }) {
   if (msg.type === "dice") {
     const meta = msg.metadata || {};
     const isCrit = meta.is_critical;
+    const charName = meta.character_name;
+    const nameColor = getCharColor(charName);
     return (
       <div className={`flex justify-center py-2 ${isCrit === "critical_success" ? "critical-success" : isCrit === "critical_failure" ? "critical-failure" : ""}`}>
         <div className={`px-4 py-2 rounded-lg text-sm font-mono ${isCrit === "critical_success" ? "bg-yellow-900/30 border border-yellow-600 text-yellow-400" : isCrit === "critical_failure" ? "bg-red-900/30 border border-red-600 text-red-400" : "bg-gray-800 text-gray-300"}`}>
-          <span>{msg.content}</span>
+          <span style={{color: nameColor, fontWeight: 'bold'}}>{charName || "??"}</span>
+          <span> {meta.expression} = {meta.total}</span>
           {meta.dc != null && <span className="ml-2">DC {meta.dc} — {meta.success ? "✅ 成功" : "❌ 失败"}</span>}
           {isCrit === "critical_success" && <span className="ml-2">🎉 大成功！</span>}
           {isCrit === "critical_failure" && <span className="ml-2">💀 大失败！</span>}
@@ -723,9 +770,10 @@ function MessageBubble({ msg, players, characters }) {
 
   if (msg.type === "action") {
     const char = characters?.find((c) => c.player_id === msg.player_id);
+    const nameColor = getCharColor(char?.name);
     return (
       <div className="flex items-start gap-2 bg-amber-900/10 rounded-lg px-3 py-2 border border-amber-900/30">
-        <span className="text-amber-400 font-bold text-xs shrink-0 mt-0.5">{char?.name || player?.nickname || "冒险者"}</span>
+        <span className="font-bold text-xs shrink-0 mt-0.5" style={{color: nameColor}}>{char?.name || player?.nickname || "冒险者"}</span>
         <span className="text-gray-200 text-sm">▸ {msg.content}</span>
       </div>
     );
