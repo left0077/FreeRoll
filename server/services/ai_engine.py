@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 import json
+import uuid
+from datetime import datetime
 from openai import AsyncOpenAI
 from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 
@@ -227,6 +229,15 @@ async def process_action(room: dict, player_input: str, character_name: str,
     result["_partial_narrative"] = narrative
 
     result["narrative"] = (narrative or "").strip()
+
+    # If AI wrote dice results in narrative, add corrective reminder
+    if result.get("_violation") == "roll_in_narrative":
+        room["messages"].append({
+            "id": str(uuid.uuid4()), "player_id": None, "type": "system",
+            "content": "[SYSTEM] 违规：上一条回复在叙事中直接写了骰子结果。必须调用 roll_dice 函数，绝不允许在叙事中写 d20=10 之类的文字。下不为例。",
+            "metadata": {}, "turn_number": room["turn_number"],
+            "created_at": datetime.now().isoformat(),
+        })
     return result
 
 
@@ -370,6 +381,9 @@ def _parse_mixed_response(text: str, result: dict):
 
     if not narrative_text:
         narrative_text = re.sub(r'<controls>.*?</controls>', '', text, flags=re.DOTALL).strip()
+    # Check for AI self-roll violation
+    if re.search(r'\bd\d+\s*=\s*\d+', narrative_text):
+        result["_violation"] = "roll_in_narrative"
     result["narrative"] = narrative_text
 
 
