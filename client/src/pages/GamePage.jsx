@@ -152,8 +152,8 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         }]);
         // Update local character state
         setCharacters((prev) => prev.map((c) => {
-          if (c.id === payload.character_id) {
-            // Apply bar deltas
+          const matches = c.id === payload.character_id || c.name === payload.character_name;
+          if (matches) {
             let bars = { ...c.bars };
             const barDelta = payload.bar_delta || {};
             for (const [name, delta] of Object.entries(barDelta)) {
@@ -161,18 +161,15 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
                 bars[name] = { ...bars[name], current: Math.max(0, Math.min(bars[name].current + delta, bars[name].max)) };
               }
             }
-            // Add/remove bars
             if (payload.add_bar) {
               bars[payload.add_bar.name] = { current: payload.add_bar.current || 0, max: payload.add_bar.max || 0 };
             }
             if (payload.remove_bar && bars[payload.remove_bar]) {
               delete bars[payload.remove_bar];
             }
-            // Inventory
             let inv = [...(c.inventory || [])];
             if (payload.add_item) inv.push(payload.add_item);
             if (payload.remove_item) inv = inv.filter((i) => i !== payload.remove_item);
-            // Statuses
             let st = [...(c.statuses || [])];
             if (payload.add_status) st.push(payload.add_status);
             if (payload.remove_status) st = st.filter((s) => s !== payload.remove_status);
