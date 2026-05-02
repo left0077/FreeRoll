@@ -118,6 +118,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
           }
           return "";
         });
+        setProcessing(false);
         break;
       case "gm_narrative_done":
         setStreamingText((prev) => {
