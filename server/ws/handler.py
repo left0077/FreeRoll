@@ -4,7 +4,7 @@ from services.room_manager import (
     get_room, add_player, remove_player, add_message, add_dice_log,
     save_snapshot, restore_snapshot
 )
-from services.ai_engine import process_action, resume_with_roll
+from services.ai_engine import process_action, resume_with_roll, execute_pending_roll
 from services.dice import roll as do_roll
 from services.room_manager import (
     create_room, get_room, delete_room, add_player,
@@ -420,10 +420,24 @@ async def _handle_roll_confirm(room, player):
 
     ai_result = pending["ai_result"]
     roll_args = pending["roll_args"]
+    room.pop("_pending_roll", None)
 
+    # Phase 1: Execute dice immediately → broadcast result with animation
+    char = next((c for c in room["characters"] if c.player_id == player.id), None)
+    dr = execute_pending_roll(ai_result, roll_args)
+    if dr:
+        dice_char = next((c for c in room["characters"] if c.name == dr["character_name"]), char)
+        add_dice_log(code, dice_char.id if dice_char else "", dr["expression"], dr["total"],
+                    {"rolls": dr["rolls"], "bonus": dr["bonus"]},
+                    dc=dr.get("dc"), success=dr.get("success"),
+                    is_critical=bool(dr.get("is_critical")))
+        add_message(code, None, "dice", f"{dr['character_name']} {dr['expression']} = {dr['total']}", metadata=dr)
+        dr["character_id"] = dice_char.id if dice_char else ""
+        await _broadcast(code, {"type": "gm_dice_result", "payload": dr})
+
+    # Phase 2: Resume AI to get narrative (runs in background)
     try:
         ai_result2 = await resume_with_roll(ai_result, roll_args)
-        room.pop("_pending_roll", None)  # Only clear on success
         await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
     except Exception:
         import traceback

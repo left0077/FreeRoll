@@ -282,15 +282,24 @@ async def process_action(room: dict, player_input: str, character_name: str,
     return result
 
 
+def execute_pending_roll(prev_result: dict, dice_args: dict) -> dict:
+    """Execute the dice roll immediately. Returns dice_result dict."""
+    tool_calls_data = prev_result["_tool_calls_data"]
+    for tc in tool_calls_data:
+        if tc["name"] == "roll_dice":
+            return _execute_dice(dice_args or tc["args"])
+    return None
+
+
 async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) -> dict:
-    """Resume AI after player confirmed a roll. Executes roll and gets final narrative."""
+    """Resume AI after roll executed. Gets final narrative from AI."""
     messages = prev_result["_messages"]
     tool_calls_data = prev_result["_tool_calls_data"]
     tool_results = list(prev_result["_tool_results"])
     extra_fields = prev_result["_extra"]
     narrative = prev_result["_partial_narrative"] or ""
 
-    # Find the pending roll_dice call and execute it
+    # Build tool result for the already-executed roll
     for tc in tool_calls_data:
         if tc["name"] == "roll_dice":
             dr = _execute_dice(dice_args or tc["args"])
@@ -299,6 +308,7 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
                 "tool_call_id": tc["id"],
                 "content": json.dumps({"total": dr["total"], "rolls": dr["rolls"], "bonus": dr["bonus"]}, ensure_ascii=False),
             })
+            break
 
     # Build assistant message with all tool calls
     assistant_msg = {
@@ -314,7 +324,7 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
     messages.append(assistant_msg)
     messages.extend(tool_results)
 
-    # Final call
+    # Final call to AI
     try:
         if on_chunk:
             narrative2, _ = await _stream_call(messages, on_chunk)
@@ -330,18 +340,11 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
     # Parse markers
     result = {
         "narrative": "",
-        "dice_result": None,
         "state_changes": prev_result.get("state_changes", []),
         "next_player": None,
         "ending_suggested": None,
         "suggested_actions": [],
     }
-
-    # Re-execute dice to include in result
-    for tc in tool_calls_data:
-        if tc["name"] == "roll_dice":
-            result["dice_result"] = _execute_dice(dice_args or tc["args"])
-            break
 
     next_match = re.search(r'\[NEXT:(.+?)\]', full_narrative)
     if next_match:
