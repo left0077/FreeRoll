@@ -121,13 +121,11 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         setProcessing(false);
         break;
       case "gm_narrative":
-        // If streaming chunks arrived, move that text to messages; otherwise add new
+        // Finalize: streaming text (if any) becomes permanent message
         setStreamingText((prev) => {
-          if (prev && prev !== payload.content) {
-            // Streaming was active — finalize accumulated text
+          if (prev) {
             setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: prev, turn_number: payload.turn_number }]);
-          } else if (!prev) {
-            // No streaming — add the full text directly
+          } else {
             setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }]);
           }
           return "";
