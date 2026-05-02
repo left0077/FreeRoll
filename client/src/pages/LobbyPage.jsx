@@ -7,6 +7,7 @@ const TEMPLATES = [
   { key: "rainbow_six", name: "彩虹六号", desc: "精英反恐部队的战术行动" },
   { key: "animal_world", name: "动物世界", desc: "非洲草原上的生存与荣耀" },
   { key: "nailong_vs_laoda", name: "奶龙大战劳大", desc: "棉花糖火焰 vs 可乐炸弹！" },
+  { key: "gambler_king", name: "赌王争霸", desc: "澳门赌场，筹码与心理的巅峰对决" },
 ];
 
 export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart, onLeave }) {
