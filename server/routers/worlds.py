@@ -10,38 +10,64 @@ router = APIRouter(prefix="/api/worlds", tags=["worlds"])
 client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=30.0)
 
 TEMPLATES = {
-    "classic_dungeon": {
-        "name": "经典地城",
-        "overview": "一个古老的地下城中埋藏着失落的宝藏。黑暗的走廊中回荡着未知生物的嘶吼。",
-        "factions": ["冒险者公会", "地城守卫者", "暗影教团"],
-        "rules": ["D&D 5e 基础规则", "地城中每探索一个新房间需要掷察觉检定"],
-        "bar_schema": {"HP": {"default": 20, "description": "生命值，归零则昏迷"}},
-        "storyline": {
-            "title": "失落宝藏",
-            "stages": ["??", "??", "??", "??"],
+    "isekai_adventure": {
+        "name": "异世界冒险",
+        "overview": "你被召唤到了剑与魔法的异世界。王国正面临魔王军的威胁，冒险者公会在各地招募勇者。魔法、龙与古老的遗迹等待探索。",
+        "factions": ["冒险者公会", "魔王军", "王国骑士团", "精灵聯邦"],
+        "rules": ["经典奇幻规则", "咏唱魔法需消耗魔力", "击败敌人可获得经验成长"],
+        "bar_schema": {
+            "HP": {"default": 20, "description": "生命值"},
+            "MP": {"default": 30, "description": "魔力值，用于释放魔法"},
         },
+        "storyline": {"title": "击败魔王", "stages": ["??", "??", "??", "??"]},
     },
-    "cthulhu_investigation": {
-        "name": "克苏鲁调查",
-        "overview": "1920年代的新英格兰，一系列离奇事件指向某个不可名状的存在。理智是比生命更珍贵的资源。",
-        "factions": ["调查员", "密斯卡托尼克大学", "深潜者教派"],
-        "rules": ["COC 7e 简化规则", "目睹恐怖事物需掷 SAN CHECK", "SAN 归零则角色陷入疯狂"],
-        "bar_schema": {"HP": {"default": 12, "description": "生命值"}, "SAN": {"default": 60, "description": "理智值，归零陷入疯狂"}},
-        "storyline": {
-            "title": "不可名状的真相",
-            "stages": ["??", "??", "??"],
+    "japanese_high_school": {
+        "name": "日式校园高中",
+        "overview": "樱花飘落的四月，县立橘花高中的新学期开始了。这里没有剑与魔法，只有青春、恋爱、友情和数不清的社团活动。你的选择将改变与你有关的一切。",
+        "factions": ["学生会", "运动社团", "文艺部", "归宅部"],
+        "rules": ["好感度系统：与角色互动影响关系", "社团活动每两周有特殊事件", "考试季有学业压力事件", "放学后的自由时间可自由行动"],
+        "bar_schema": {
+            "好感度": {"default": 0, "description": "与重要角色的好感度，影响关系发展"},
+            "成绩": {"default": 50, "description": "学业成绩，低于30会被强制补习"},
+            "体力": {"default": 100, "description": "精力值，社团活动和打工消耗体力"},
         },
+        "storyline": {"title": "学园祭的约定", "stages": ["??", "??", "??"]},
     },
-    "cyberpunk_bar": {
-        "name": "赛博朋克酒吧",
-        "overview": "2077年，霓虹灯下的夜之城。一间名为'自由落体'的酒吧里，佣兵、黑客和公司特工在此交汇。",
-        "factions": ["街头佣兵", "荒坂公司", "网络黑客", "漩涡帮"],
-        "rules": ["赛博朋克简易规则", "黑客行为需掷技术检定", "植入体可提供加成"],
-        "bar_schema": {"HP": {"default": 20, "description": "生命值"}, "信用点": {"default": 500, "description": "电子货币，用于购买装备和信息"}},
-        "storyline": {
-            "title": "夜之城暗流",
-            "stages": ["??", "??", "??"],
+    "rainbow_six": {
+        "name": "彩虹六号",
+        "overview": "这里是彩虹小队，全球最精锐的反恐部队。每一次任务都可能是最后一次——情报是关键，团队配合是生命，一个错误的决定将导致不可挽回的后果。准备好了吗，干员？",
+        "factions": ["彩虹小队", "白面具恐怖组织", "当地警方", "情报局"],
+        "rules": ["战术射击规则：战斗高度致命", "情报收集影响任务难度", "队友状态影响团队行动", "每次任务前可规划战术"],
+        "bar_schema": {
+            "HP": {"default": 100, "description": "生命值，归零则重伤倒地"},
+            "弹药": {"default": 120, "description": "弹药储备，耗尽无法射击"},
+            "情报值": {"default": 0, "description": "任务情报完整度，越高越容易发现陷阱"},
         },
+        "storyline": {"title": "化解危机", "stages": ["??", "??", "??", "??"]},
+    },
+    "animal_world": {
+        "name": "动物世界",
+        "overview": "非洲大草原上，万物遵循着古老的自然法则。狮群统治着领地，鬣狗在暗处窥伺，象群穿越干涸的河床。生存、家族、荣耀——这就是动物的世界。",
+        "factions": ["狮群", "鬣狗群", "象群", "人类猎人"],
+        "rules": ["动物本能规则：每个物种有独特能力", "领地争夺战影响生存资源", "季节更替影响食物和水源", "幼崽的成长是族群的未来"],
+        "bar_schema": {
+            "HP": {"default": 20, "description": "生命值"},
+            "食物储备": {"default": 30, "description": "族群的食物存量，耗尽会饥饿"},
+            "声望": {"default": 10, "description": "在草原上的威望，影响其他动物的态度"},
+        },
+        "storyline": {"title": "草原之王", "stages": ["??", "??", "??"]},
+    },
+    "nailong_vs_laoda": {
+        "name": "奶龙大战劳大",
+        "overview": "在奶龙大陆上，正义的奶龙军团与邪恶的劳大势力展开了终极对决。奶龙们喷吐棉花糖火焰，劳大手下的薯条兵挥舞着番茄酱利剑。这是一场关乎零食自由与沙发主权的史诗战争！",
+        "factions": ["奶龙军团", "劳大帝国", "薯条雇佣兵", "中立甜品店"],
+        "rules": ["搞笑战斗规则：创意越大伤害越高", "奶龙喷火消耗棉花糖能量", "劳大的可乐炸弹可以摧毁奶龙堡垒", "中立甜品店可以补充体力但价格很坑"],
+        "bar_schema": {
+            "HP": {"default": 25, "description": "生命值"},
+            "棉花糖能量": {"default": 50, "description": "奶龙喷火消耗的能量"},
+            "搞笑值": {"default": 0, "description": "搞笑创意分，越高伤害越大"},
+        },
+        "storyline": {"title": "零食自由之战", "stages": ["??", "??", "??"]},
     },
 }
 

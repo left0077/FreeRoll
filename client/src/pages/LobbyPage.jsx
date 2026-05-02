@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { api } from "../utils/api";
 
 const TEMPLATES = [
-  { key: "classic_dungeon", name: "经典地城", desc: "古老地下城中的失落宝藏" },
-  { key: "cthulhu_investigation", name: "克苏鲁调查", desc: "不可名状的恐怖在等待" },
-  { key: "cyberpunk_bar", name: "赛博朋克酒吧", desc: "霓虹之下，暗流涌动" },
+  { key: "isekai_adventure", name: "异世界冒险", desc: "剑与魔法的奇幻大陆，击败魔王军" },
+  { key: "japanese_high_school", name: "日式校园高中", desc: "青春、恋爱与社团活动的每一天" },
+  { key: "rainbow_six", name: "彩虹六号", desc: "精英反恐部队的战术行动" },
+  { key: "animal_world", name: "动物世界", desc: "非洲草原上的生存与荣耀" },
+  { key: "nailong_vs_laoda", name: "奶龙大战劳大", desc: "棉花糖火焰 vs 可乐炸弹！" },
 ];
 
 export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart, onLeave }) {
@@ -12,7 +14,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   const [charDesc, setCharDesc] = useState("");
   const [generatingChar, setGeneratingChar] = useState(false);
   const [worldType, setWorldType] = useState("template");
-  const [worldRef, setWorldRef] = useState("classic_dungeon");
+  const [worldRef, setWorldRef] = useState("isekai_adventure");
   const [searchQuery, setSearchQuery] = useState("");
   const [generatingWorld, setGeneratingWorld] = useState(false);
   const [error, setError] = useState("");
@@ -210,10 +212,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
           <div className="max-w-2xl mx-auto mb-8">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-amber-400 font-bold text-lg">
-                {room.world_module?.source_ref === "classic_dungeon" ? "经典地城" :
-                 room.world_module?.source_ref === "cthulhu_investigation" ? "克苏鲁调查" :
-                 room.world_module?.source_ref === "cyberpunk_bar" ? "赛博朋克酒吧" :
-                 room.world_module?.source_ref || "世界模组"}
+                {TEMPLATES.find((t) => t.key === room.world_module?.source_ref)?.name || room.world_module?.source_ref || "世界模组"}
               </h3>
               {isOwner && (
                 <button onClick={handleResetWorld} className="text-xs text-gray-500 hover:text-red-400">重置</button>
