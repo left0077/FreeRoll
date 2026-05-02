@@ -32,6 +32,11 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
     sockets[:] = [w for w in sockets if getattr(w, '_freeroll_pid', None) != player_id]
     ws._freeroll_pid = player_id
     sockets.append(ws)
+    # Clear in-flight flags if this player was the one stuck
+    if room.get("_processing") and room.get("_pending_roll", {}).get("player_id") == player_id:
+        pass  # Keep pending roll — they might be reconnecting to confirm it
+    elif room.get("_processing"):
+        room.pop("_processing", None)
 
     # Send full room state immediately — no HTTP GET needed
     await ws.send_json({
