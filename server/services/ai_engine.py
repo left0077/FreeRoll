@@ -187,9 +187,16 @@ async def process_action(room: dict, player_input: str, character_name: str,
         "tool_calls_made": [],
     }
 
-    # First call always normal (may have tool calls, needs reasoning_content)
+    # First call (streaming if callback, captures reasoning_content from stream)
     extra_fields = {}
-    narrative, tool_calls_data, extra_fields = await _normal_call(messages)
+    if on_chunk:
+        try:
+            narrative, tool_calls_data, extra_fields = await _stream_call(messages, on_chunk)
+        except Exception:
+            import traceback; traceback.print_exc()
+            narrative, tool_calls_data, extra_fields = await _normal_call(messages)
+    else:
+        narrative, tool_calls_data, extra_fields = await _normal_call(messages)
 
     # Process tool calls from first response
     tool_results = []
@@ -225,7 +232,7 @@ async def process_action(room: dict, player_input: str, character_name: str,
             messages.extend(tool_results)
             try:
                 if on_chunk:
-                    narrative2, _ = await _stream_call(messages, on_chunk)
+                    narrative2, _, _ = await _stream_call(messages, on_chunk)
                 else:
                     narrative2, _, _ = await _normal_call(messages)
             except Exception:
@@ -318,12 +325,11 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
     # Final call to AI
     try:
         if on_chunk:
-            narrative2, _ = await _stream_call(messages, on_chunk)
+            narrative2, _, _ = await _stream_call(messages, on_chunk)
         else:
             narrative2, _, _ = await _normal_call(messages)
     except Exception:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         narrative2, _, _ = await _normal_call(messages)
 
     full_narrative = (narrative or "") + (narrative2 or "")
@@ -386,7 +392,7 @@ async def _normal_call(messages):
 
 
 async def _stream_call(messages, on_chunk):
-    """Stream call: call on_chunk(text) for each token, return (full_text, tools)."""
+    """Stream call: call on_chunk(text) for each token. Returns (full_text, tools, extra_fields)."""
     stream = await client.chat.completions.create(
         model=DEEPSEEK_MODEL, messages=messages,
         tools=[ROLL_DICE_TOOL, UPDATE_STATE_TOOL],
@@ -395,19 +401,22 @@ async def _stream_call(messages, on_chunk):
     )
 
     content = ""
-    tool_calls_acc = {}  # {index: {id, name, args_str}}
+    reasoning = ""
+    tool_calls_acc = {}
 
     async for chunk in stream:
         delta = chunk.choices[0].delta if chunk.choices else None
         if not delta:
             continue
 
-        # Text content
         if delta.content:
             content += delta.content
             await on_chunk(delta.content)
 
-        # Tool calls (accumulated across chunks)
+        # Capture reasoning_content from thinking chunks
+        if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+            reasoning += delta.reasoning_content
+
         if delta.tool_calls:
             for tc_delta in delta.tool_calls:
                 idx = tc_delta.index
@@ -421,7 +430,6 @@ async def _stream_call(messages, on_chunk):
                     if tc_delta.function.arguments:
                         tool_calls_acc[idx]["args_str"] += tc_delta.function.arguments
 
-    # Parse accumulated tool calls
     tools = []
     for tc in tool_calls_acc.values():
         try:
@@ -430,7 +438,10 @@ async def _stream_call(messages, on_chunk):
             args = {}
         tools.append({"id": tc["id"], "name": tc["name"], "args": args})
 
-    return content, tools
+    extra = {}
+    if reasoning:
+        extra["reasoning_content"] = reasoning
+    return content, tools, extra
 
 
 def _execute_dice(args: dict) -> dict:
