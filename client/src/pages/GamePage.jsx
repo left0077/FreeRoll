@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../utils/api";
-import { useWebSocket } from "../hooks/useWebSocket";
 import DiceRoller from "../components/DiceRoller";
 
 
-export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
+export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
   const [messages, setMessages] = useState([]);
   const [players, setPlayers] = useState([]);
   const [characters, setCharacters] = useState([]);
@@ -28,11 +27,10 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
-  const { connect, disconnect, on, send, status } = useWebSocket(roomCode, playerId);
+  const { send, on, status } = ws;
 
   useEffect(() => {
-    connect();
-    return () => disconnect();
+    return () => {};
   }, [roomCode]);
 
   useEffect(() => {
@@ -221,10 +219,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
     }
   };
 
-  const handleBack = () => {
-    disconnect();
-    onLeave();
-  };
+  const handleBack = () => onLeave();
 
   const handleRollback = async (toTurn) => {
     try {

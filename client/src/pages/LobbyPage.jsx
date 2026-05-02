@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { api } from "../utils/api";
-import { useWebSocket } from "../hooks/useWebSocket";
 
 const TEMPLATES = [
   { key: "classic_dungeon", name: "经典地城", desc: "古老地下城中的失落宝藏" },
@@ -8,7 +7,7 @@ const TEMPLATES = [
   { key: "cyberpunk_bar", name: "赛博朋克酒吧", desc: "霓虹之下，暗流涌动" },
 ];
 
-export default function LobbyPage({ roomCode, playerId, isOwner, onGameStart, onLeave }) {
+export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart, onLeave }) {
   const [room, setRoom] = useState(null);
   const [charDesc, setCharDesc] = useState("");
   const [generatingChar, setGeneratingChar] = useState(false);
@@ -20,17 +19,14 @@ export default function LobbyPage({ roomCode, playerId, isOwner, onGameStart, on
   const [expandedChar, setExpandedChar] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const { connect, disconnect, on, status } = useWebSocket(roomCode, playerId);
+  const { on, status } = ws;
 
   useEffect(() => {
-    connect();
     loadRoom();
     on("player_joined", loadRoom);
     on("player_left", loadRoom);
     on("game_started", onGameStart);
     on("error", (p) => setError(p.message));
-    on("_reconnected", loadRoom);
-    return () => disconnect();
   }, [roomCode]);
 
   const loadRoom = async () => {
