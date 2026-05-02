@@ -261,7 +261,7 @@ export default function WorldBuilder({ onBack, onCreateRoom }) {
             <select className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm"
               value={genType} onChange={(e) => setGenType(e.target.value)}>
               <option value="template">预设模板</option>
-              <option value="search">搜索作品</option>
+              <option value="search">自由描述</option>
             </select>
             {genType === "template" ? (
               <select className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm"

@@ -178,7 +178,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               {["template", "web_search"].map((t) => (
                 <button key={t} onClick={() => setWorldType(t)}
                   className={`flex-1 py-2 rounded-lg text-sm font-bold ${worldType === t ? "bg-amber-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
-                  {t === "template" ? "预设模板" : "搜索作品"}
+                  {t === "template" ? "预设模板" : "自由描述"}
                 </button>
               ))}
             </div>
@@ -194,7 +194,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               </div>
             ) : (
               <input className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-amber-500 focus:outline-none"
-                placeholder="输入作品名，如《诡秘之主》" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                placeholder="描述你想要的世界，如：赛博朋克修仙门派" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             )}
             <button onClick={handleGenerateWorld} disabled={generatingWorld}
               className="w-full py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50">
