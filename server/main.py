@@ -21,7 +21,10 @@ app.include_router(characters.router)
 
 @app.websocket("/ws/{room_code}")
 async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str = Query(...)):
-    await websocket.accept()
+    try:
+        await websocket.accept()
+    except Exception:
+        return  # Client already disconnected
     await handle_ws(websocket, room_code.upper(), player_id)
 
 

@@ -23,7 +23,11 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
         return
 
     player.is_online = True
-    CONNECTIONS.setdefault(room_code, []).append(ws)
+    # Remove old connection for same player (prevents duplicates)
+    sockets = CONNECTIONS.setdefault(room_code, [])
+    sockets[:] = [w for w in sockets if getattr(w, '_freeroll_pid', None) != player_id]
+    ws._freeroll_pid = player_id
+    sockets.append(ws)
 
     await _broadcast(room_code, {
         "type": "player_joined",
@@ -36,12 +40,17 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
 
     try:
         while True:
-            raw = await ws.receive_text()
+            try:
+                raw = await ws.receive_text()
+            except RuntimeError:
+                # WebSocket was closed before receiving (Starlette 1.0 compatibility)
+                break
             data = json.loads(raw)
             msg_type = data.get("type")
             payload = data.get("payload", {})
 
             if msg_type == "player_action":
+                print(f"[WS] player_action from {player.nickname} ({player.id[:8]}), turn={room.get('current_player_id','')[:8]}, status={room.get('status')}", flush=True)
                 await _handle_action(room, player, payload)
             elif msg_type == "roll_confirm":
                 await _handle_roll_confirm(room, player)
@@ -62,6 +71,8 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
 
     except WebSocketDisconnect:
         pass
+    except RuntimeError:
+        pass  # Starlette 1.0 WebSocket state issue
     finally:
         player.is_online = False
         CONNECTIONS[room_code] = [w for w in CONNECTIONS.get(room_code, []) if w != ws]

@@ -210,8 +210,21 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
     }
 
     if (!send("player_action", { content })) {
-      setProcessing(false);
-      setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: "❌ 连接未就绪，请等待连接后重试" }]);
+      // WebSocket not open — retry a few times with backoff
+      let retries = 0;
+      const trySend = () => {
+        if (send("player_action", { content })) {
+          setProcessing(true);
+          return;
+        }
+        retries++;
+        if (retries < 5) setTimeout(trySend, 500 * retries);
+        else {
+          setProcessing(false);
+          setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: "❌ 连接未就绪，请刷新页面后重试" }]);
+        }
+      };
+      trySend();
     }
   };
 
@@ -533,7 +546,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
         <div className="flex gap-2">
           <input
             className="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none"
-            placeholder={status !== "connected" ? "正在连接服务器..." : isMyTurn ? "输入你的行动..." : "等待其他玩家行动..."}
+            placeholder={isMyTurn ? "输入你的行动..." : "等待其他玩家行动..."}
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
@@ -547,7 +560,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
                 send("typing_end", {});
               }
             }}
-            disabled={status !== "connected" || (!isMyTurn && !input.startsWith("(OOC)"))}
+            disabled={!isMyTurn && !input.startsWith("(OOC)")}
           />
           {isMyTurn && !processing && (
             <button
@@ -559,10 +572,10 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
           )}
           <button
             onClick={() => { handleSend(); send("typing_end", {}); }}
-            disabled={status !== "connected" || !input.trim() || processing || (!isMyTurn && !input.startsWith("(OOC)") && !input.startsWith("/d"))}
+            disabled={!input.trim() || processing || (!isMyTurn && !input.startsWith("(OOC)") && !input.startsWith("/d"))}
             className="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50 shrink-0"
           >
-            {status !== "connected" ? "连接中..." : "行动"}
+            行动
           </button>
         </div>
         <div className="text-xs text-gray-600 mt-1">
