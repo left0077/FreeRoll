@@ -279,7 +279,7 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
     # Parse second call independently — it's the final narrative after the roll
     result = {
         "narrative": "",
-        "state_changes": prev_result.get("state_changes", []),
+        "state_changes": [],  # Only second call changes — first call's already processed
         "next_player": None,
         "ending_suggested": None,
         "suggested_actions": [],

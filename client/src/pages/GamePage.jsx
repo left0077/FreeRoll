@@ -154,11 +154,15 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         }]);
         break;
       case "state_update":
-        setMessages((prev) => [...prev, {
-          id: Date.now(), type: "system",
-          content: payload.narrative || `${payload.character_name} 状态变化`,
-          metadata: payload,
-        }]);
+        const scParts = [];
+        const bd = payload.bar_delta || {};
+        for (const [k, v] of Object.entries(bd)) scParts.push(`${k} ${v > 0 ? '+' + v : v}`);
+        if (payload.add_item) scParts.push(`获得 ${payload.add_item}`);
+        if (payload.remove_item) scParts.push(`失去 ${payload.remove_item}`);
+        if (payload.add_status) scParts.push(`⚡${payload.add_status}`);
+        if (payload.remove_status) scParts.push(`解除 ${payload.remove_status}`);
+        const scText = scParts.length > 0 ? `${payload.character_name} ${scParts.join('，')}` : (payload.narrative || `${payload.character_name} 状态变化`);
+        setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: scText, metadata: payload }]);
         // Update local character state
         setCharacters((prev) => prev.map((c) => {
           const matches = c.id === payload.character_id || c.name === payload.character_name;
