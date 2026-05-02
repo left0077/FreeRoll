@@ -103,7 +103,12 @@ async def api_generate_world(req: GenerateRequest):
             available = list(TEMPLATES.keys())
             raise HTTPException(status_code=400, detail=f"模板不存在，可用：{available}")
         initial_scene = await _generate_initial_scene(template)
-        presets = await _generate_presets_for_template(template, initial_scene)
+        player_count = 2
+        if req.room_code:
+            room = get_room(req.room_code.upper())
+            if room:
+                player_count = max(2, len(room["players"]))
+        presets = await _generate_presets_for_template(template, initial_scene, player_count)
         world = {
             "source_type": "template",
             "source_ref": req.ref,
@@ -144,8 +149,9 @@ async def api_generate_world(req: GenerateRequest):
     return world
 
 
-async def _generate_presets_for_template(template: dict, scene: str) -> list:
-    """Generate 2-3 preset characters for a template world."""
+async def _generate_presets_for_template(template: dict, scene: str, player_count: int = 2) -> list:
+    """Generate preset characters scaled to room size (min 3, max ~player_count+2)."""
+    count = max(3, min(player_count + 2, 6))
     bar_schema = template.get("bar_schema", {"HP": {"default": 20, "description": "生命值"}})
     bar_info = ", ".join([f"{k}({v['description']})" for k, v in bar_schema.items()])
 
@@ -154,20 +160,19 @@ async def _generate_presets_for_template(template: dict, scene: str) -> list:
 可用数值条：{bar_info}
 初始场景：{scene}
 
-为这个世界观生成 2-3 个预设角色卡，输出 JSON 数组：
+为这个世界观生成恰好 {count} 个预设角色卡，输出 JSON 数组。角色要来自不同势力（每个势力至少一个）、性格互补、能力各异。格式：
 [
   {{"name": "角色名", "bars": {{"HP": {{"current": 20, "max": 20}} }}, "tags": ["标签"], "attributes": {{}}, "inventory": ["物品"], "description": "角色简介"}}
 ]
-角色要来自不同势力且性格互补。输出合法 JSON。"""
+输出合法 JSON。"""
     try:
         resp = await client.chat.completions.create(
             model=DEEPSEEK_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.9, max_tokens=1024,
+            temperature=0.9, max_tokens=1536,
             response_format={"type": "json_object"},
         )
         data = json.loads(resp.choices[0].message.content)
-        # AI might return {"characters": [...]} or just [...]
         chars = data if isinstance(data, list) else data.get("characters", data.get("preset_characters", []))
         return chars if isinstance(chars, list) else []
     except Exception:

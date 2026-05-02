@@ -639,7 +639,7 @@ async def _handle_generate_world(room, player, payload, ws, rid):
         except Exception:
             scene = f"欢迎来到{template['name']}。{template['overview']}"
         from routers.worlds import _generate_presets_for_template
-        presets = await _generate_presets_for_template(template, scene)
+        presets = await _generate_presets_for_template(template, scene, max(2, len(room["players"])))
         world = {
             "source_type": "template", "source_ref": ref,
             "content": {"overview": template["overview"], "factions": template["factions"], "custom_rules": template["rules"], "bar_schema": template.get("bar_schema", {}), "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}), "initial_scene": scene},
