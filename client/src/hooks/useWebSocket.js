@@ -11,39 +11,39 @@ export function useWebSocket(roomCode, playerId) {
 
   const doConnect = useCallback(() => {
     if (!roomCode || !playerId) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const ready = wsRef.current?.readyState;
+    if (ready === WebSocket.OPEN || ready === WebSocket.CONNECTING) return;
 
     const base = getBackendUrl();
     const wsUrl = base.replace(/^http/, "ws");
     const url = `${wsUrl}/ws/${roomCode}?player_id=${playerId}`;
+    console.log('[WS] Connecting to', url);
 
     setStatus("connecting");
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      console.log('[WS] Connected');
       setStatus("connected");
       reconnectAttemptsRef.current = 0;
-      // Call sync handler so the page can reload room state
-      if (handlersRef.current["_reconnected"]) {
-        handlersRef.current["_reconnected"]();
-      }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      console.log('[WS] Closed', event.code, event.reason);
       setStatus("disconnected");
       wsRef.current = null;
-      // Auto-reconnect unless intentionally closed
       if (!intentionalCloseRef.current && roomCode && playerId) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 8000);
         reconnectAttemptsRef.current++;
+        console.log('[WS] Reconnecting in', delay, 'ms');
         setStatus("reconnecting");
         reconnectTimerRef.current = setTimeout(doConnect, delay);
       }
     };
 
-    ws.onerror = () => {
-      // onclose will fire after this
+    ws.onerror = (event) => {
+      console.log('[WS] Error', event);
     };
 
     ws.onmessage = (event) => {
