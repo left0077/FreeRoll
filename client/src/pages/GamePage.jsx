@@ -122,6 +122,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         setDiceResult({ ...payload, _anim: true, _ts: Date.now() });
         setTimeout(() => setDiceResult(null), 8000);
         setDiceHistory((prev) => [{ ...payload, _ts: Date.now() }, ...prev].slice(0, 50));
+        setStreamingText("");  // Clear "等待掷骰..." — dice result is here
         setMessages((prev) => [...prev, {
           id: Date.now(), type: "dice",
           content: `${payload.character_name} ${payload.expression} = ${payload.total}`,
