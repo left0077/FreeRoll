@@ -168,6 +168,10 @@ def save_snapshot(code: str):
             "inventory": list(c.inventory),
             "statuses": list(c.statuses),
         }
+    # Also snapshot storyline progress
+    wm = room.get("world_module")
+    if wm and wm.get("content", {}).get("storyline"):
+        snap["__storyline"] = list(wm["content"]["storyline"]["stages"])
     room["snapshots"][str(turn)] = snap
 
 
@@ -183,6 +187,11 @@ def restore_snapshot(code: str, to_turn: int):
             c.bars = {k: dict(v) for k, v in s["bars"].items()}
             c.inventory = list(s["inventory"])
             c.statuses = list(s["statuses"])
+    # Restore storyline
+    if "__storyline" in snap:
+        wm = room.get("world_module")
+        if wm and wm.get("content", {}).get("storyline"):
+            wm["content"]["storyline"]["stages"] = snap["__storyline"]
     # Delete messages and dice logs after target turn
     room["messages"] = [m for m in room["messages"] if m["turn_number"] < to_turn]
     room["dice_logs"] = [d for d in room["dice_logs"] if d["turn_number"] < to_turn]

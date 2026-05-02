@@ -92,6 +92,12 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。你的职责�
 - 错误示范（太泛）："我检查房间"、"我搜索物品"、"我观察四周"
 - 正确示范："蹲下用手指触碰地上的暗红色液体确认是否是血迹"、"朝声音传来的东北方向走廊轻声喊话试探"
 
+## 世界书记录
+- 当玩家发现重要的NPC、地点、物品或线索时，在叙事末尾用标记记录下来
+- 格式：[NOTE:分类:内容]。分类：npc(人物)、location(地点)、clue(线索)、event(事件)
+- 例如：[NOTE:npc:神秘的精灵商人艾隆，在废弃矿坑入口摆摊][NOTE:clue:矿坑深处传来有规律的敲击声]
+- 只记录玩家新发现的事物，不要重复已有信息
+
 ## 剧情主线
 - 游戏有主线剧情（storyline），分多个阶段。当玩家完成一个阶段时，推进主线
 - 如果玩家发现了新的重要情报或剧情转折，可以更新后续阶段的内容
@@ -257,6 +263,12 @@ async def process_action(room: dict, player_input: str, character_name: str,
         result["plot_update"] = {"stage": int(plot_match.group(1)), "name": plot_match.group(2).strip()}
         narrative = re.sub(r'\[PLOT:\d+:.+?\]', '', narrative or "").strip()
 
+    # Parse world book notes
+    notes = re.findall(r'\[NOTE:(\w+):(.+?)\]', narrative or "")
+    if notes:
+        result["world_notes"] = [{"category": c, "content": t.strip()} for c, t in notes]
+        narrative = re.sub(r'\[NOTE:\w+:.+?\]', '', narrative or "").strip()
+
     # Store state for potential resume
     result["_messages"] = messages
     result["_tool_calls_data"] = tool_calls_data
@@ -348,6 +360,11 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
     if plot_match:
         result["plot_update"] = {"stage": int(plot_match.group(1)), "name": plot_match.group(2).strip()}
         full_narrative = re.sub(r'\[PLOT:\d+:.+?\]', '', full_narrative).strip()
+
+    notes = re.findall(r'\[NOTE:(\w+):(.+?)\]', full_narrative)
+    if notes:
+        result["world_notes"] = [{"category": c, "content": t.strip()} for c, t in notes]
+        full_narrative = re.sub(r'\[NOTE:\w+:.+?\]', '', full_narrative).strip()
 
     result["narrative"] = full_narrative.strip()
     return result

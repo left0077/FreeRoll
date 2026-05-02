@@ -25,7 +25,8 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
   const [diceHistory, setDiceHistory] = useState([]);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [suggestedActions, setSuggestedActions] = useState([]);
-  const [storyline, setStoryline] = useState(null); // {title, stages: ["name", "??", ...]}
+  const [storyline, setStoryline] = useState(null);
+  const [discoveries, setDiscoveries] = useState([]);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
@@ -83,6 +84,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       setCharacters(payload.characters || []);
       setCurrentPlayerId(payload.current_player_id);
       setTurnNumber(payload.turn_number);
+      setDiscoveries(payload.discoveries || []);
       if (payload.world_module?.content) {
         localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(payload.world_module.content));
         if (payload.world_module.content.storyline) {
@@ -187,6 +189,9 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         if (!payload.player_id || payload.player_id === playerId) {
           setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: `❌ ${payload.message}` }]);
         }
+        break;
+      case "discoveries_updated":
+        setDiscoveries(payload.discoveries || []);
         break;
       case "plot_updated":
         setStoryline(payload.storyline);
@@ -342,14 +347,25 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
           <div className="flex items-center gap-2 text-xs">
             <span className="text-amber-400 font-bold whitespace-nowrap">{storyline.title}</span>
             <div className="flex items-center gap-1 overflow-x-auto">
-              {storyline.stages.map((s, i) => (
-                <div key={i} className="flex items-center gap-1 shrink-0">
-                  {i > 0 && <span className="text-gray-700">▸</span>}
-                  <span className={`px-1.5 py-0.5 rounded ${s === "??" ? "text-gray-600 bg-gray-800/50" : s === "__done__" ? "text-green-400 bg-green-900/20" : "text-amber-300 bg-amber-900/20"}`}>
-                    {s === "??" ? "???" : s}
-                  </span>
-                </div>
-              ))}
+              {storyline.stages.map((s, i) => {
+                // Find current stage: rightmost non-"??" stage
+                const lastRevealed = storyline.stages.map((x, j) => x !== "??" ? j : -1).filter(j => j >= 0).pop() ?? -1;
+                const isCompleted = i < lastRevealed;
+                const isCurrent = i === lastRevealed;
+                const isUnrevealed = s === "??";
+                return (
+                  <div key={i} className="flex items-center gap-1 shrink-0">
+                    {i > 0 && <span className="text-gray-700">▸</span>}
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      isCompleted ? "text-green-400 bg-green-900/20 line-through decoration-green-700" :
+                      isCurrent ? "text-amber-300 bg-amber-900/30 font-bold" :
+                      "text-gray-600 bg-gray-800/50"
+                    }`}>
+                      {isCompleted ? "✓" : ""} {isUnrevealed ? "???" : s}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -361,9 +377,20 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
           <MessageBubble key={msg.id || i} msg={msg} players={players} characters={characters} />
         ))}
 
+        {/* Current player indicator (visible when it's someone else's turn) */}
+        {!isMyTurn && !processing && currentPlayerId && (
+          <div className="flex items-center gap-2 text-sm pl-2 py-1 mb-1 bg-amber-900/10 rounded border border-amber-900/20">
+            <span className="text-amber-400 animate-pulse text-lg">⏳</span>
+            <span className="text-gray-400">
+              <span className="text-amber-300 font-bold">{players.find((p) => p.id === currentPlayerId)?.nickname || "..."}</span>
+              {' '}正在思考行动...
+            </span>
+          </div>
+        )}
+
         {/* Typing indicator */}
         {typingNames.length > 0 && (
-          <div className="flex items-center gap-2 text-gray-500 text-sm pl-2">
+          <div className="flex items-center gap-2 text-amber-400/80 text-sm pl-2 py-1">
             <span>{typingNames.join(", ")} 正在输入</span>
             <span className="typing-dot inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
             <span className="typing-dot inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
@@ -399,22 +426,23 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
 
       {/* Roll request overlay - AI asks player to roll */}
       {rollRequest && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/60" onClick={() => {
-          send("roll_confirm", {});
-          setRollRequest(null);
-          setProcessing(true);
-        }}>
-          <div className="px-8 py-6 rounded-2xl bg-gray-900 border-2 border-amber-500 text-center space-y-4 animate-pulse cursor-pointer hover:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/60">
+          <div className="px-8 py-6 rounded-2xl bg-gray-900 border-2 border-amber-500 text-center space-y-4 animate-pulse">
             <p className="text-gray-400 text-sm">{rollRequest.reason}</p>
             <p className="text-amber-400 text-4xl font-bold font-mono">{rollRequest.dice}</p>
             <p className="text-gray-500 text-sm">{rollRequest.character_name}</p>
             <button
-              onClick={() => { send("roll_confirm", {}); setRollRequest(null); setProcessing(true); }}
+              onClick={() => {
+                if (send("roll_confirm", {})) {
+                  setRollRequest(null);
+                  setProcessing(true);
+                }
+              }}
               className="px-8 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg"
             >
               掷骰！
             </button>
-            <p className="text-gray-600 text-xs">点击按钮或任意位置掷骰</p>
+            <p className="text-gray-600 text-xs">点击按钮掷骰</p>
           </div>
         </div>
       )}
@@ -511,42 +539,43 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
 
       {/* World book panel */}
       {showWorldBook && (
-        <div className="border-t border-gray-800 bg-gray-900 px-4 py-3 shrink-0 max-h-56 overflow-y-auto">
+        <div className="border-t border-gray-800 bg-gray-900 px-4 py-3 shrink-0 max-h-64 overflow-y-auto">
           <div className="flex justify-between items-center mb-2">
             <h3 className="text-amber-400 font-bold text-sm">世界书</h3>
             <button onClick={() => setShowWorldBook(false)} className="text-gray-500">✕</button>
           </div>
           <div className="text-sm space-y-3">
-            <div>
-              <span className="text-gray-500">回合 {turnNumber} · {players.length} 名冒险者 · {characters.map((c) => c.name).join("、")}</span>
-            </div>
+            {/* Discoveries — dynamic */}
+            {discoveries.length > 0 && (
+              <div>
+                <h4 className="text-gray-400 font-bold text-xs mb-1">已发现</h4>
+                <div className="space-y-1">
+                  {discoveries.map((d, i) => {
+                    const icons = { npc: "👤", location: "📍", clue: "🔍", event: "⚡" };
+                    return (
+                      <div key={i} className="flex gap-1.5 text-xs">
+                        <span>{icons[d.category] || "📌"}</span>
+                        <span className="text-gray-300">{d.content}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {/* Static world info */}
             {(() => {
               try {
                 const wm = JSON.parse(localStorage.getItem("freeroll_world_" + roomCode) || "{}");
                 if (wm.overview) {
                   return (
-                    <>
-                      <div>
-                        <h4 className="text-gray-400 font-bold text-xs mb-1">世界观</h4>
-                        <p className="text-gray-300">{wm.overview}</p>
-                      </div>
-                      {wm.factions?.length > 0 && (
-                        <div>
-                          <h4 className="text-gray-400 font-bold text-xs mb-1">势力</h4>
-                          <p className="text-gray-300">{wm.factions.join(" · ")}</p>
-                        </div>
-                      )}
-                      {wm.custom_rules?.length > 0 && (
-                        <div>
-                          <h4 className="text-gray-400 font-bold text-xs mb-1">特色规则</h4>
-                          <p className="text-amber-400/70">{wm.custom_rules.join("；")}</p>
-                        </div>
-                      )}
-                    </>
+                    <div>
+                      <h4 className="text-gray-400 font-bold text-xs mb-1">世界设定</h4>
+                      <p className="text-gray-500 text-xs">{wm.overview}</p>
+                    </div>
                   );
                 }
               } catch (e) {}
-              return <p className="text-gray-500">世界信息将在游戏中逐步揭示...</p>;
+              return null;
             })()}
           </div>
         </div>
@@ -603,7 +632,13 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
           />
           {isMyTurn && !processing && (
             <button
-              onClick={() => { send("player_action", { content: "我保持观望，等待事态发展" }); setProcessing(true); }}
+              onClick={() => {
+                const skipAction = `我暂时观望，等待局势进一步发展`;
+                const msg = { id: Date.now(), type: "action", content: skipAction, player_id: playerId, turn_number: turnNumber };
+                setMessages((prev) => [...prev, msg]);
+                send("player_action", { content: skipAction });
+                setProcessing(true);
+              }}
               className="px-3 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-400 text-sm shrink-0"
             >
               跳过

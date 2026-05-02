@@ -290,6 +290,16 @@ async def _handle_action(room, player, payload):
             },
         })
 
+    # World book notes
+    notes = ai_result.get("world_notes", [])
+    if notes:
+        room.setdefault("discoveries", [])
+        for note in notes:
+            if not any(d.get("content") == note["content"] for d in room["discoveries"]):
+                room["discoveries"].append({"category": note["category"], "content": note["content"], "turn": room["turn_number"]})
+        if notes:
+            await _broadcast(code, {"type": "discoveries_updated", "payload": {"discoveries": room["discoveries"]}})
+
     # Plot progression
     plot = ai_result.get("plot_update")
     if plot:
@@ -463,6 +473,16 @@ async def _process_ai_result(room, code, ai_result, player, prev_state_changes=N
             "turn_number": room["turn_number"],
         }})
 
+    # World book notes
+    notes = ai_result.get("world_notes", [])
+    if notes:
+        room.setdefault("discoveries", [])
+        for note in notes:
+            if not any(d.get("content") == note["content"] for d in room["discoveries"]):
+                room["discoveries"].append({"category": note["category"], "content": note["content"], "turn": room["turn_number"]})
+        if notes:
+            await _broadcast(code, {"type": "discoveries_updated", "payload": {"discoveries": room["discoveries"]}})
+
     # Plot progression
     plot = ai_result.get("plot_update")
     if plot:
@@ -481,6 +501,8 @@ async def _process_ai_result(room, code, ai_result, player, prev_state_changes=N
 async def _send_to_player(room_code: str, player_id: str, message: dict):
     """Send a message to a specific player only."""
     for ws in CONNECTIONS.get(room_code, []):
+        if getattr(ws, '_freeroll_pid', None) != player_id:
+            continue
         try:
             await ws.send_json(message)
         except Exception:
@@ -525,8 +547,23 @@ async def _handle_end_game(room, player, payload, ws, rid):
     if not next((p for p in room["players"] if p.is_owner and p.id == player.id), None):
         await _reply(ws, {"_error": "仅房主可执行此操作"}, rid); return
     room["status"] = "ended"
-    await _broadcast(room["code"], {"type": "game_ended", "payload": {"message": "游戏结束！"}})
-    await _reply(ws, {"status": "ended"}, rid)
+
+    # Generate brief summary
+    summary = f"冒险结束！共 {room['turn_number']} 回合，{len(room['players'])} 名冒险者参与。"
+    try:
+        msgs = [m["content"][:200] for m in room.get("messages", []) if m["type"] == "narrative"][-3:]
+        if msgs:
+            from openai import AsyncOpenAI
+            from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+            ai = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=15.0)
+            prompt = f"用两句话为这次跑团冒险写一个精彩的战报总结。最后几段叙事：{'; '.join(msgs)}"
+            resp = await ai.chat.completions.create(model=DEEPSEEK_MODEL, messages=[{"role": "user", "content": prompt}], max_tokens=150)
+            summary = resp.choices[0].message.content.strip()
+    except Exception:
+        pass
+
+    await _broadcast(room["code"], {"type": "game_ended", "payload": {"message": "游戏结束！", "summary": summary}})
+    await _reply(ws, {"status": "ended", "summary": summary}, rid)
     delete_room(room["code"])
 
 
@@ -678,6 +715,7 @@ def _build_room_state(room: dict) -> dict:
             for c in room["characters"]
         ],
         "world_module": room.get("world_module"),
+        "discoveries": room.get("discoveries", []),
         "messages": [
             {"id": m["id"], "player_id": m["player_id"], "type": m["type"],
              "content": m["content"], "metadata": m.get("metadata"),
