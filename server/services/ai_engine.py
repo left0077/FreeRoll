@@ -257,8 +257,17 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
             })
             break
 
-    # Use original message dict from first call + tool results
-    messages.append(extra_fields)
+    # Append assistant message with tool calls, then tool results
+    if extra_fields and extra_fields.get("role") == "assistant":
+        messages.append(extra_fields)
+    else:
+        assistant_msg = {
+            "role": "assistant", "content": narrative,
+            "tool_calls": [{"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["args"], ensure_ascii=False)}} for tc in tool_calls_data],
+        }
+        if extra_fields.get("reasoning_content"):
+            assistant_msg["reasoning_content"] = extra_fields["reasoning_content"]
+        messages.append(assistant_msg)
     messages.extend(tool_results)
 
     # Normal call
@@ -358,6 +367,8 @@ def _parse_mixed_response(text: str, result: dict):
         m = re.search(r'\[ACTIONS:(.+?)\]', narrative_text)
         if m: result["suggested_actions"] = [a.strip() for a in m.group(1).split("|") if a.strip()]
 
+    if not narrative_text:
+        narrative_text = re.sub(r'<controls>.*?</controls>', '', text, flags=re.DOTALL).strip()
     result["narrative"] = narrative_text
 
 
