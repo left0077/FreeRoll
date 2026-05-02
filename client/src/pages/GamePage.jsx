@@ -111,6 +111,14 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       case "gm_narrative_chunk":
         setStreamingText((prev) => prev + payload.content);
         break;
+      case "gm_narrative_chunk_done":
+        setStreamingText((prev) => {
+          if (prev) {
+            setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: prev, turn_number: payload.turn_number }]);
+          }
+          return "";
+        });
+        break;
       case "gm_narrative_done":
         setStreamingText((prev) => {
           if (prev) {

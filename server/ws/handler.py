@@ -212,8 +212,10 @@ async def _do_handle_action(room, player, payload):
 
     try:
         ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
-        # Flush any remaining buffered text (that isn't the sentinel or a partial marker)
-        if _buf and _buf != "[SYSTEM]" and not _buf.startswith("[SYS"):
+        # Signal streaming is complete
+        await _broadcast(code, {"type": "gm_narrative_chunk_done", "payload": {"turn_number": room["turn_number"]}})
+        # Flush any remaining buffered text
+        if _buf and _state == "stream":
             await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
     except Exception as e:
         room["messages"] = [m for m in room["messages"] if m.get("content") != content or m.get("type") != "action"]
