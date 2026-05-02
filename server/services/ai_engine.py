@@ -378,11 +378,6 @@ def _parse_mixed_response(text: str, result: dict):
         m = re.search(r'\[ACTIONS:(.+?)\]', narrative_text)
         if m: result["suggested_actions"] = [a.strip() for a in m.group(1).split("|") if a.strip()]
 
-    # Clean narrative
-    if "<system>" not in text:
-        narrative_text = re.sub(r'<(next|actions|bar|item|status|note|plot|ending|system)[^>]*>.*?</\1>', '', narrative_text, flags=re.DOTALL).strip()
-        narrative_text = re.sub(r'\[(?:NEXT|ACTIONS|BAR|ITEM|STATUS|NOTE|PLOT|ENDING):[^\]]*\]', '', narrative_text).strip()
-
     result["narrative"] = narrative_text
 
 
