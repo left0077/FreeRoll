@@ -29,6 +29,12 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
     ws._freeroll_pid = player_id
     sockets.append(ws)
 
+    # Send full room state immediately — no HTTP GET needed
+    await ws.send_json({
+        "type": "room_state",
+        "payload": _build_room_state(room),
+    })
+
     await _broadcast(room_code, {
         "type": "player_joined",
         "payload": {
@@ -36,7 +42,7 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
             "nickname": player.nickname,
             "online_count": len(CONNECTIONS.get(room_code, [])),
         },
-    })
+    }, exclude=ws)
 
     try:
         while True:
@@ -419,6 +425,37 @@ async def _send_to_player(room_code: str, player_id: str, message: dict):
             await ws.send_json(message)
         except Exception:
             pass
+
+
+def _build_room_state(room: dict) -> dict:
+    """Build a serializable room state for the initial WebSocket push."""
+    return {
+        "code": room["code"],
+        "status": room["status"],
+        "character_mode": room["character_mode"],
+        "turn_number": room["turn_number"],
+        "current_player_id": room["current_player_id"],
+        "players": [
+            {"id": p.id, "nickname": p.nickname, "is_owner": p.is_owner, "is_online": p.is_online}
+            for p in room["players"]
+        ],
+        "characters": [
+            {
+                "id": c.id, "player_id": c.player_id, "name": c.name,
+                "is_preset": c.is_preset, "tags": c.tags,
+                "bars": c.bars, "attributes": c.attributes,
+                "description": c.description, "inventory": c.inventory, "statuses": c.statuses,
+            }
+            for c in room["characters"]
+        ],
+        "world_module": room.get("world_module"),
+        "messages": [
+            {"id": m["id"], "player_id": m["player_id"], "type": m["type"],
+             "content": m["content"], "metadata": m.get("metadata"),
+             "turn_number": m.get("turn_number")}
+            for m in room.get("messages", [])
+        ],
+    }
 
 
 async def _send_error_single(room_code: str, player_id: str, message: str):

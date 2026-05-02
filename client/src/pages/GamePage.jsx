@@ -32,9 +32,6 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
 
   useEffect(() => {
     connect();
-    loadRoom();
-    // On reconnect, reload room state
-    on("_reconnected", loadRoom);
     return () => disconnect();
   }, [roomCode]);
 
@@ -64,24 +61,20 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
     }
   }, [messages, typingPlayers, streamingText]);
 
-  const loadRoom = async () => {
-    try {
-      const data = await api(`/api/rooms/${roomCode}`);
-      setMessages(data.messages || []);
-      setPlayers(data.players || []);
-      setCharacters(data.characters || []);
-      setCurrentPlayerId(data.current_player_id);
-      setTurnNumber(data.turn_number);
-      // Cache world module for world book display
-      if (data.world_module?.content) {
-        localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(data.world_module.content));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleMessage = useCallback((type, payload) => {
+    // room_state replaces HTTP GET — all state comes through WebSocket
+    if (type === "room_state") {
+      setMessages(payload.messages || []);
+      setPlayers(payload.players || []);
+      setCharacters(payload.characters || []);
+      setCurrentPlayerId(payload.current_player_id);
+      setTurnNumber(payload.turn_number);
+      if (payload.world_module?.content) {
+        localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(payload.world_module.content));
+      }
+      return;
+    }
+
     switch (type) {
       case "gm_narrative_chunk":
         setStreamingText((prev) => prev + payload.content);
