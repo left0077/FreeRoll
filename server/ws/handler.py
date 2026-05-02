@@ -186,19 +186,19 @@ async def _do_handle_action(room, player, payload):
     save_snapshot(code)
 
     # Process through AI with streaming — stop at [SYSTEM] separator
-    _sentinel_hit = False
+    _buf = ""
 
     async def on_chunk(text: str):
-        nonlocal _sentinel_hit
-        if _sentinel_hit:
-            return
-        if "[SYSTEM]" in text:
-            before = text.split("[SYSTEM]", 1)[0]
+        nonlocal _buf
+        _buf += text
+        if "[SYSTEM]" in _buf:
+            before = _buf.split("[SYSTEM]", 1)[0]
             if before:
                 await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": before, "turn_number": room["turn_number"]}})
-            _sentinel_hit = True
-        else:
-            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": text, "turn_number": room["turn_number"]}})
+            _buf = "[SYSTEM]"  # Sentinel — discard all further chunks
+        elif len(_buf) > 500:
+            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
+            _buf = ""
 
     try:
         ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
