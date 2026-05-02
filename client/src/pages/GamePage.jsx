@@ -42,6 +42,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       setTurnNumber(data.turn_number);
       if (data.world_module?.content) {
         localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(data.world_module.content));
+        setStoryline(data.world_module.content.storyline || { title: "冒险之旅", stages: ["??", "??"] });
       }
     } catch (e) { console.error(e); }
   };
@@ -87,9 +88,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       setDiscoveries(payload.discoveries || []);
       if (payload.world_module?.content) {
         localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(payload.world_module.content));
-        if (payload.world_module.content.storyline) {
-          setStoryline(payload.world_module.content.storyline);
-        }
+        setStoryline(payload.world_module.content.storyline || { title: "冒险之旅", stages: ["??", "??"] });
       }
       if (type === "game_started") return;
     }

@@ -202,13 +202,14 @@ async def _generate_from_search(query: str) -> dict:
   "factions": ["势力1", "势力2", "势力3"],
   "custom_rules": ["特色规则1", "特色规则2"],
   "bar_schema": {{"HP": {{"default": 20, "description": "生命值"}} }},
+  "storyline": {{"title": "主线任务名", "stages": ["??", "??", "??"]}},
   "initial_scene": "初始场景描述（150字以内）",
   "preset_characters": [
     {{"name": "角色名", "description": "简介", "tags": ["标签1", "标签2"], "bars": {{"HP": {{"current": 20, "max": 20}} }}, "attributes": {{}} }}
   ]
 }}
 
-bar_schema 定义这个世界使用哪些数值条。战斗团用HP，校园团用"好感度""成绩"，克苏鲁用HP+SAN。根据作品风格选择合适的数值条。
+bar_schema 根据作品风格选择数值条。storyline 设计3-4个剧情阶段，所有阶段初始为"??"。
 
 请确保输出是合法的 JSON，不要加额外说明文字。"""
 
