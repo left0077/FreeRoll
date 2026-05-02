@@ -476,6 +476,7 @@ async def _send_error(room_code: str, message: str):
 
 async def _handle_roll_confirm(room, player):
     code = room["code"]
+    print(f"[ROLL_CONFIRM] from {player.nickname} ({player.id[:8]})", flush=True)
     pending = room.get("_pending_roll")
     if not pending or pending["player_id"] != player.id:
         await _send_error_single(code, player.id, "没有待掷骰的请求")

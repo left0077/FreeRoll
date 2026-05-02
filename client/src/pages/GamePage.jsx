@@ -466,7 +466,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
             >
               掷骰！
             </button>
-            <p className="text-gray-600 text-xs">点击按钮掷骰</p>
+            <p className="text-gray-600 text-xs">点击按钮掷骰（30秒后自动掷骰）</p>
           </div>
         </div>
       )}
