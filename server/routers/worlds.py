@@ -77,6 +77,7 @@ async def api_generate_world(req: GenerateRequest):
             available = list(TEMPLATES.keys())
             raise HTTPException(status_code=400, detail=f"模板不存在，可用：{available}")
         initial_scene = await _generate_initial_scene(template)
+        presets = await _generate_presets_for_template(template, initial_scene)
         world = {
             "source_type": "template",
             "source_ref": req.ref,
@@ -88,7 +89,7 @@ async def api_generate_world(req: GenerateRequest):
                 "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}),
                 "initial_scene": initial_scene,
             },
-            "preset_characters": [],
+            "preset_characters": presets,
         }
 
     elif req.type == "web_search":
@@ -115,6 +116,36 @@ async def api_generate_world(req: GenerateRequest):
             })
 
     return world
+
+
+async def _generate_presets_for_template(template: dict, scene: str) -> list:
+    """Generate 2-3 preset characters for a template world."""
+    bar_schema = template.get("bar_schema", {"HP": {"default": 20, "description": "生命值"}})
+    bar_info = ", ".join([f"{k}({v['description']})" for k, v in bar_schema.items()])
+
+    prompt = f"""世界观：{template['name']} — {template['overview']}
+势力：{', '.join(template.get('factions', []))}
+可用数值条：{bar_info}
+初始场景：{scene}
+
+为这个世界观生成 2-3 个预设角色卡，输出 JSON 数组：
+[
+  {{"name": "角色名", "bars": {{"HP": {{"current": 20, "max": 20}} }}, "tags": ["标签"], "attributes": {{}}, "inventory": ["物品"], "description": "角色简介"}}
+]
+角色要来自不同势力且性格互补。输出合法 JSON。"""
+    try:
+        resp = await client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.9, max_tokens=1024,
+            response_format={"type": "json_object"},
+        )
+        data = json.loads(resp.choices[0].message.content)
+        # AI might return {"characters": [...]} or just [...]
+        chars = data if isinstance(data, list) else data.get("characters", data.get("preset_characters", []))
+        return chars if isinstance(chars, list) else []
+    except Exception:
+        return []
 
 
 async def _generate_initial_scene(template: dict) -> str:
