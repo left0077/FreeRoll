@@ -198,20 +198,24 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
 
     // Check for OOC chat
     if (content.startsWith("(OOC)") || content.startsWith("(ooc)")) {
-      send("player_chat", { content: content.replace(/^\(OOC\)\s*/i, "") });
-      setProcessing(false);
+      if (!send("player_chat", { content: content.replace(/^\(OOC\)\s*/i, "") })) {
+        setProcessing(false);
+      }
       return;
     }
 
     // Check for dice command
     if (content.startsWith("/d")) {
-      const expr = content.slice(1);
-      send("dice_roll", { expression: expr });
-      setProcessing(false);
+      if (!send("dice_roll", { expression: content.slice(1) })) {
+        setProcessing(false);
+      }
       return;
     }
 
-    send("player_action", { content });
+    if (!send("player_action", { content })) {
+      setProcessing(false);
+      setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: "❌ 连接未就绪，请等待连接后重试" }]);
+    }
   };
 
   const handleBack = () => {
@@ -269,15 +273,38 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
         </div>
       </div>
 
-      {/* Active player indicator */}
-      <div className="px-4 py-1.5 bg-gray-900/50 text-center text-sm shrink-0">
-        {isMyTurn ? (
-          <span className="text-amber-400 font-bold">轮到你了！</span>
-        ) : (
-          <span className="text-gray-500">
-            等待 {players.find((p) => p.id === currentPlayerId)?.nickname || "..."} 行动
-          </span>
-        )}
+      {/* Party status bar — always visible */}
+      <div className="px-3 py-2 bg-gray-900 border-b border-gray-800 shrink-0 overflow-x-auto">
+        <div className="flex gap-2 items-center min-w-max">
+          {characters.map((c) => {
+            const isCurrent = c.player_id === currentPlayerId;
+            const owner = players.find((p) => p.id === c.player_id);
+            return (
+              <div key={c.id} className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-all ${isCurrent ? "bg-amber-900/40 border border-amber-600/50 ring-1 ring-amber-500/30" : "bg-gray-800/70 border border-transparent"}`}>
+                <span className={`font-bold ${isCurrent ? "text-amber-300" : "text-gray-300"}`}>
+                  {c.name}
+                </span>
+                {c.bars && Object.entries(c.bars).map(([bn, b]) => {
+                  const pct = b.max > 0 ? b.current / b.max : 1;
+                  return (
+                    <div key={bn} className="flex items-center gap-1">
+                      <span className="text-gray-500">{bn}</span>
+                      <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${pct <= 0.3 ? "bg-red-500" : pct <= 0.6 ? "bg-yellow-500" : "bg-green-500"}`} style={{width: `${pct*100}%`}} />
+                      </div>
+                      <span className={`font-mono ${pct <= 0.3 ? "text-red-400" : "text-gray-400"}`}>{b.current}</span>
+                    </div>
+                  );
+                })}
+                {c.statuses?.length > 0 && c.statuses.map((s) => (
+                  <span key={s} className="text-purple-400 text-xs">⚡{s}</span>
+                ))}
+                {isCurrent && <span className="text-amber-400 text-xs animate-pulse">◀ 行动中</span>}
+              </div>
+            );
+          })}
+          <span className="text-gray-600 text-xs ml-1">回合 {turnNumber}</span>
+        </div>
       </div>
 
       {/* Messages */}
@@ -488,7 +515,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
         <div className="flex gap-2">
           <input
             className="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none"
-            placeholder={isMyTurn ? "描述你的行动..." : "等待你的回合..."}
+            placeholder={status !== "connected" ? "正在连接服务器..." : isMyTurn ? "描述你的行动..." : "等待你的回合..."}
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
@@ -502,7 +529,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
                 send("typing_end", {});
               }
             }}
-            disabled={!isMyTurn && !input.startsWith("(OOC)")}
+            disabled={status !== "connected" || (!isMyTurn && !input.startsWith("(OOC)"))}
           />
           {isMyTurn && !processing && (
             <button
@@ -514,10 +541,10 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
           )}
           <button
             onClick={() => { handleSend(); send("typing_end", {}); }}
-            disabled={!input.trim() || processing || (!isMyTurn && !input.startsWith("(OOC)") && !input.startsWith("/d"))}
-            className="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-30 shrink-0"
+            disabled={status !== "connected" || !input.trim() || processing || (!isMyTurn && !input.startsWith("(OOC)") && !input.startsWith("/d"))}
+            className="px-4 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50 shrink-0"
           >
-            行动
+            {status !== "connected" ? "连接中..." : "行动"}
           </button>
         </div>
         <div className="text-xs text-gray-600 mt-1">

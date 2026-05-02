@@ -83,7 +83,9 @@ export function useWebSocket(roomCode, playerId) {
   const send = useCallback((type, payload = {}) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type, payload }));
+      return true;
     }
+    return false;
   }, []);
 
   useEffect(() => {
