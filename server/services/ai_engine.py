@@ -455,7 +455,7 @@ def _execute_dice(args: dict) -> dict:
     if dc is not None:
         success = dice_result["total"] >= dc
     return {
-        "character_name": args.get("character_name", "冒险者"),
+        "character_name": args.get("character_name") or args.get("name") or "",
         "expression": dice_expr,
         "total": dice_result["total"],
         "rolls": dice_result["rolls"],

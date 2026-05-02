@@ -481,6 +481,8 @@ async def _handle_roll_confirm(room, player):
     char = next((c for c in room["characters"] if c.player_id == player.id), None)
     dr = execute_pending_roll(ai_result, roll_args)
     if dr:
+        if not dr.get("character_name") and char:
+            dr["character_name"] = char.name
         dice_char = next((c for c in room["characters"] if c.name == dr["character_name"]), char)
         add_dice_log(code, dice_char.id if dice_char else "", dr["expression"], dr["total"],
                     {"rolls": dr["rolls"], "bonus": dr["bonus"]},
