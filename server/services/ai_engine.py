@@ -378,7 +378,7 @@ async def _normal_call(messages):
         model=DEEPSEEK_MODEL, messages=messages,
         tools=[ROLL_DICE_TOOL],  # Only dice — state changes via [BAR:...] text markers
         temperature=0.8, max_tokens=1024,
-
+        extra_body={"thinking": {"type": "enabled"}},
     )
     msg = resp.choices[0].message
     tools = []
@@ -402,7 +402,7 @@ async def _stream_call(messages, on_chunk):
         tools=[ROLL_DICE_TOOL],
         temperature=0.8, max_tokens=1024,
         stream=True,
-
+        extra_body={"thinking": {"type": "enabled"}},
     )
 
     content = ""
