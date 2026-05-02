@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useWebSocket } from "./hooks/useWebSocket";
+import { setWsTransport } from "./utils/api";
 import HomePage from "./pages/HomePage";
 import LobbyPage from "./pages/LobbyPage";
 import GamePage from "./pages/GamePage";
@@ -11,12 +12,15 @@ export default function App() {
   const [playerId, setPlayerId] = useState("");
   const [isOwner, setIsOwner] = useState(false);
 
-  // Shared WebSocket — connects when room is active, stays connected across pages
-  const { connect, disconnect, send, on, off, status } = useWebSocket(roomCode, playerId);
+  // Shared WebSocket for everything
+  const { connect, disconnect, send, request, on, off, status } = useWebSocket(roomCode, playerId);
+
+  // api.js routes through WebSocket when available
+  useEffect(() => { setWsTransport(request); }, [request]);
 
   useEffect(() => {
     if (roomCode && playerId) connect();
-    return () => {};
+    return () => { setWsTransport(null); };
   }, [roomCode, playerId, connect]);
 
   const enterLobby = useCallback((code, pid, owner) => {

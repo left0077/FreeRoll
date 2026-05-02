@@ -6,6 +6,10 @@ from services.room_manager import (
 )
 from services.ai_engine import process_action, resume_with_roll
 from services.dice import roll as do_roll
+from services.room_manager import (
+    create_room, get_room, delete_room, add_player,
+    add_character, get_character, Character, restore_snapshot,
+)
 
 CONNECTIONS: dict[str, list[WebSocket]] = {}  # {room_code: [ws, ...]}
 
@@ -74,6 +78,36 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
                     "type": "typing_indicator",
                     "payload": {"player_id": player.id, "nickname": player.nickname, "is_typing": False},
                 }, exclude=ws)
+
+            # -- CRUD operations via WebSocket --
+            elif msg_type == "get_room":
+                await _reply(ws, _build_room_state(room), data.get("_rid"))
+            elif msg_type == "join_room":
+                p = add_player(room_code, payload.get("nickname", "玩家"), player_id=payload.get("player_id"))
+                await _reply(ws, {"player_id": p.id if p else "", "code": room_code, "error": None if p else "无法加入"}, data.get("_rid"))
+                if p:
+                    await _broadcast(room_code, {"type": "player_joined", "payload": {"player_id": p.id, "nickname": p.nickname, "online_count": len(CONNECTIONS.get(room_code, []))}}, exclude=ws)
+            elif msg_type == "start_game":
+                await _handle_start_game(room, player, payload, ws, data.get("_rid"))
+            elif msg_type == "end_game":
+                await _handle_end_game(room, player, payload, ws, data.get("_rid"))
+            elif msg_type == "rollback_game":
+                await _handle_rollback(room, player, payload, ws, data.get("_rid"))
+            elif msg_type == "generate_world":
+                await _handle_generate_world(room, player, payload, ws, data.get("_rid"))
+            elif msg_type == "reset_world":
+                room["world_module"] = None
+                await _reply(ws, {"status": "reset"}, data.get("_rid"))
+                await _broadcast(room_code, {"type": "world_updated", "payload": {"reset": True}})
+            elif msg_type == "generate_character":
+                await _handle_generate_character(room, player, payload, ws, data.get("_rid"))
+            elif msg_type == "claim_character":
+                await _handle_claim_character(room, player, payload, ws, data.get("_rid"))
+            elif msg_type == "delete_character":
+                cid = payload.get("character_id", "")
+                room["characters"] = [c for c in room["characters"] if c.id != cid]
+                await _reply(ws, {"status": "deleted"}, data.get("_rid"))
+                await _broadcast(room_code, {"type": "character_updated"})
 
     except WebSocketDisconnect:
         pass
@@ -425,6 +459,170 @@ async def _send_to_player(room_code: str, player_id: str, message: dict):
             await ws.send_json(message)
         except Exception:
             pass
+
+
+async def _reply(ws, payload, rid=None):
+    """Send a response. If rid is provided, client will match it to a pending request."""
+    msg = {"type": "ok", "payload": payload}
+    if rid:
+        msg["_rid"] = rid
+    try:
+        await ws.send_json(msg)
+    except Exception:
+        pass
+
+
+async def _handle_start_game(room, player, payload, ws, rid):
+    if not next((p for p in room["players"] if p.is_owner and p.id == player.id), None):
+        await _reply(ws, {"_error": "仅房主可执行此操作"}, rid); return
+    if len(room["players"]) < 1:
+        await _reply(ws, {"_error": "至少需要1名玩家"}, rid); return
+    if not room["characters"]:
+        await _reply(ws, {"_error": "还没有角色"}, rid); return
+    if not room.get("world_module"):
+        await _reply(ws, {"_error": "还没有生成世界模组"}, rid); return
+
+    room["status"] = "playing"
+    room["turn_number"] = 0
+    room["current_player_id"] = room["characters"][0].player_id
+    initial_scene = room["world_module"].get("content", {}).get("initial_scene", "冒险开始了...")
+    add_message(room["code"], None, "narrative", initial_scene)
+
+    await _reply(ws, {"status": "playing"}, rid)
+    await _broadcast(room["code"], {
+        "type": "game_started",
+        "payload": {**_build_room_state(room), "initial_scene": initial_scene, "first_player_name": room["characters"][0].name},
+    })
+
+
+async def _handle_end_game(room, player, payload, ws, rid):
+    if not next((p for p in room["players"] if p.is_owner and p.id == player.id), None):
+        await _reply(ws, {"_error": "仅房主可执行此操作"}, rid); return
+    room["status"] = "ended"
+    await _broadcast(room["code"], {"type": "game_ended", "payload": {"message": "游戏结束！"}})
+    await _reply(ws, {"status": "ended"}, rid)
+    delete_room(room["code"])
+
+
+async def _handle_rollback(room, player, payload, ws, rid):
+    if not next((p for p in room["players"] if p.is_owner and p.id == player.id), None):
+        await _reply(ws, {"_error": "仅房主可执行此操作"}, rid); return
+    to_turn = payload.get("to_turn", 0)
+    ok = restore_snapshot(room["code"], to_turn)
+    if not ok:
+        await _reply(ws, {"_error": "回溯失败"}, rid); return
+    await _broadcast(room["code"], {"type": "room_rollback", "payload": {"to_turn": to_turn}})
+    await _reply(ws, {"status": "rolled_back"}, rid)
+
+
+async def _handle_generate_world(room, player, payload, ws, rid):
+    import json as _json
+    from openai import AsyncOpenAI
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+
+    wtype = payload.get("type", "template")
+    ref = payload.get("ref", "classic_dungeon")
+
+    if wtype == "template":
+        from routers.worlds import TEMPLATES
+        template = TEMPLATES.get(ref)
+        if not template:
+            await _reply(ws, {"_error": "模板不存在"}, rid); return
+        ai_client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=30.0)
+        prompt = f"为以下世界观写一段150字以内的初始场景描述：世界观：{template['name']} 概述：{template['overview']} 势力：{', '.join(template['factions'])} 直接写叙事文本。"
+        try:
+            resp = await ai_client.chat.completions.create(model=DEEPSEEK_MODEL, messages=[{"role": "user", "content": prompt}], temperature=0.9, max_tokens=300)
+            scene = resp.choices[0].message.content.strip()
+        except Exception:
+            scene = f"欢迎来到{template['name']}。{template['overview']}"
+        world = {
+            "source_type": "template", "source_ref": ref,
+            "content": {"overview": template["overview"], "factions": template["factions"], "custom_rules": template["rules"], "bar_schema": template.get("bar_schema", {}), "initial_scene": scene},
+            "preset_characters": [],
+        }
+    else:
+        await _reply(ws, {"_error": "仅支持 template 类型"}, rid); return
+
+    room["world_module"] = world
+    await _reply(ws, world, rid)
+    await _broadcast(room["code"], {"type": "world_updated", "payload": {"source_ref": ref, "has_presets": False}})
+
+
+async def _handle_generate_character(room, player, payload, ws, rid):
+    import json as _json
+    from openai import AsyncOpenAI
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+
+    desc = payload.get("description", "")
+    if not desc:
+        await _reply(ws, {"_error": "请输入角色描述"}, rid); return
+
+    existing_names = [c.name for c in room["characters"]]
+    world_context = ""
+    bar_info = ""
+    if room.get("world_module"):
+        c = room["world_module"].get("content", room["world_module"])
+        world_context = f"世界观：{c.get('overview', '')}"
+        if c.get("bar_schema"):
+            bar_info = f"数值条定义：{_json.dumps(c['bar_schema'], ensure_ascii=False)}"
+
+    prompt = f"""{world_context}
+{bar_info}
+已有角色名：{existing_names}。新角色名不能重复。
+
+玩家描述："{desc}"
+
+生成一个符合世界观的角色卡，输出 JSON：
+{{"name":"独特角色名","bars":{{"HP":{{"current":20,"max":20}}}},"attributes":{{}},"tags":["标签"],"inventory":["物品"],"description":"50字简介"}}
+输出合法 JSON，不要加额外文字。"""
+
+    ai_client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=30.0)
+    try:
+        resp = await ai_client.chat.completions.create(model=DEEPSEEK_MODEL, messages=[{"role": "user", "content": prompt}], temperature=0.9, max_tokens=1024, response_format={"type": "json_object"})
+        char_data = _json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        await _reply(ws, {"_error": f"AI生成失败: {e}"}, rid); return
+
+    char_name = char_data.get("name", "未命名")
+    if char_name in existing_names:
+        char_name += "_2"
+
+    character = Character(
+        player_id=player.id, name=char_name,
+        attributes=char_data.get("attributes", {}), tags=char_data.get("tags", []),
+        bars=char_data.get("bars", {"HP": {"current": 20, "max": 20}}),
+        inventory=char_data.get("inventory", []), description=char_data.get("description", ""),
+    )
+    add_character(room["code"], character)
+
+    await _reply(ws, {
+        "id": character.id, "player_id": character.player_id, "name": character.name,
+        "bars": character.bars, "attributes": character.attributes, "tags": character.tags,
+        "inventory": character.inventory, "statuses": character.statuses, "description": character.description,
+    }, rid)
+    await _broadcast(room["code"], {"type": "character_updated"})
+
+
+async def _handle_claim_character(room, player, payload, ws, rid):
+    wm = room.get("world_module")
+    if not wm:
+        await _reply(ws, {"_error": "世界模组尚未生成"}, rid); return
+    presets = wm.get("preset_characters", [])
+    idx = payload.get("preset_index", 0)
+    if idx >= len(presets):
+        await _reply(ws, {"_error": "预设角色不存在"}, rid); return
+
+    preset = presets[idx]
+    character = Character(
+        player_id=player.id, name=preset.get("name", "未命名"), is_preset=True,
+        attributes=preset.get("attributes", {}), tags=preset.get("tags", []),
+        bars=preset.get("bars", {"HP": {"current": 20, "max": 20}}),
+        inventory=preset.get("inventory", []), description=preset.get("description", ""),
+    )
+    add_character(room["code"], character)
+
+    await _reply(ws, {"id": character.id, "player_id": character.player_id, "name": character.name, "is_preset": True, "bars": character.bars}, rid)
+    await _broadcast(room["code"], {"type": "character_updated"})
 
 
 def _build_room_state(room: dict) -> dict:

@@ -4,17 +4,17 @@ import { getBackendUrl } from "../utils/api";
 export function useWebSocket(roomCode, playerId) {
   const wsRef = useRef(null);
   const handlersRef = useRef({});
+  const pendingRef = useRef({}); // { _rid: { resolve, reject, timer } }
   const reconnectTimerRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const intentionalCloseRef = useRef(false);
-  const [status, setStatus] = useState("disconnected"); // disconnected | connecting | connected | reconnecting
+  const [status, setStatus] = useState("disconnected");
 
   const doConnect = useCallback(() => {
     if (!roomCode || !playerId) return;
     const ready = wsRef.current?.readyState;
     if (ready === WebSocket.OPEN || ready === WebSocket.CONNECTING) return;
 
-    // Reset intentional close flag (may have been set by StrictMode double-mount)
     intentionalCloseRef.current = false;
 
     const base = getBackendUrl();
@@ -34,6 +34,12 @@ export function useWebSocket(roomCode, playerId) {
 
     ws.onclose = (event) => {
       console.log('[WS] Closed', event.code, event.reason);
+      // Reject all pending requests
+      for (const [rid, p] of Object.entries(pendingRef.current)) {
+        clearTimeout(p.timer);
+        p.reject(new Error("WebSocket disconnected"));
+        delete pendingRef.current[rid];
+      }
       setStatus("disconnected");
       wsRef.current = null;
       if (!intentionalCloseRef.current && roomCode && playerId) {
@@ -45,14 +51,24 @@ export function useWebSocket(roomCode, playerId) {
       }
     };
 
-    ws.onerror = (event) => {
-      console.log('[WS] Error', event);
-    };
+    ws.onerror = (event) => { console.log('[WS] Error', event); };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      const rid = data._rid;
       const type = data.type;
       const payload = data.payload || {};
+
+      // Resolve pending request-response if matching _rid
+      if (rid && pendingRef.current[rid]) {
+        const p = pendingRef.current[rid];
+        clearTimeout(p.timer);
+        delete pendingRef.current[rid];
+        if (data._error) p.reject(new Error(data._error));
+        else p.resolve(data);
+      }
+
+      // Dispatch to registered event handlers
       if (handlersRef.current[type]) {
         handlersRef.current[type](payload);
       }
@@ -91,9 +107,26 @@ export function useWebSocket(roomCode, playerId) {
     return false;
   }, []);
 
+  // Request-response: sends a message and returns a Promise that resolves on response
+  const request = useCallback((type, payload = {}, timeoutMs = 30000) => {
+    return new Promise((resolve, reject) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        reject(new Error("WebSocket not connected"));
+        return;
+      }
+      const rid = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+      const timer = setTimeout(() => {
+        delete pendingRef.current[rid];
+        reject(new Error("Request timed out"));
+      }, timeoutMs);
+      pendingRef.current[rid] = { resolve, reject, timer };
+      wsRef.current.send(JSON.stringify({ type, payload, _rid: rid }));
+    });
+  }, []);
+
   useEffect(() => {
     return () => disconnect();
   }, [disconnect]);
 
-  return { connect: doConnect, disconnect, send, on, off, status };
+  return { connect: doConnect, disconnect, send, request, on, off, status };
 }
