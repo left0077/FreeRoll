@@ -16,6 +16,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
   const [showDice, setShowDice] = useState(false);
   const [showWorldBook, setShowWorldBook] = useState(false);
   const [showCharCard, setShowCharCard] = useState(false);
+  const [rollRequest, setRollRequest] = useState(null);
   const [diceResult, setDiceResult] = useState(null);
   const [endingPrompt, setEndingPrompt] = useState(null);
   const [backendUrl, setBackendUrl] = useState("");
@@ -160,9 +161,13 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
           return next;
         });
         break;
+      case "roll_request":
+        setRollRequest(payload);
+        setProcessing(false);
+        break;
       case "error":
         setProcessing(false);
-        // Only show errors targeted at this player or general errors
+        setRollRequest(null);
         if (!payload.player_id || payload.player_id === playerId) {
           setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: `❌ ${payload.message}` }]);
         }
@@ -196,17 +201,9 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
     setInput("");
     setProcessing(true);
 
-    // Check for OOC chat
+    // OOC chat
     if (content.startsWith("(OOC)") || content.startsWith("(ooc)")) {
       if (!send("player_chat", { content: content.replace(/^\(OOC\)\s*/i, "") })) {
-        setProcessing(false);
-      }
-      return;
-    }
-
-    // Check for dice command
-    if (content.startsWith("/d")) {
-      if (!send("dice_roll", { expression: content.slice(1) })) {
         setProcessing(false);
       }
       return;
@@ -261,7 +258,6 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
           {status === "disconnected" && <span className="text-red-400 text-xs">已断开</span>}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowDice(!showDice)} className="text-gray-400 hover:text-white text-sm">🎲</button>
           <button onClick={() => setShowDiceLog(!showDiceLog)} className="text-gray-400 hover:text-white text-sm">📊</button>
           <button onClick={() => setShowCharCard(!showCharCard)} className="text-gray-400 hover:text-white text-sm">📋</button>
           <button onClick={() => setShowWorldBook(!showWorldBook)} className="text-gray-400 hover:text-white text-sm">📖</button>
@@ -348,6 +344,28 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Roll request overlay - AI asks player to roll */}
+      {rollRequest && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/60" onClick={() => {
+          send("roll_confirm", {});
+          setRollRequest(null);
+          setProcessing(true);
+        }}>
+          <div className="px-8 py-6 rounded-2xl bg-gray-900 border-2 border-amber-500 text-center space-y-4 animate-pulse cursor-pointer hover:bg-gray-800" onClick={(e) => e.stopPropagation()}>
+            <p className="text-gray-400 text-sm">{rollRequest.reason}</p>
+            <p className="text-amber-400 text-4xl font-bold font-mono">{rollRequest.dice}</p>
+            <p className="text-gray-500 text-sm">{rollRequest.character_name}</p>
+            <button
+              onClick={() => { send("roll_confirm", {}); setRollRequest(null); setProcessing(true); }}
+              className="px-8 py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg"
+            >
+              掷骰！
+            </button>
+            <p className="text-gray-600 text-xs">点击按钮或任意位置掷骰</p>
+          </div>
+        </div>
+      )}
 
       {/* Dice result overlay */}
       {diceResult && <DiceResultOverlay result={diceResult} />}
@@ -515,7 +533,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
         <div className="flex gap-2">
           <input
             className="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none"
-            placeholder={status !== "connected" ? "正在连接服务器..." : isMyTurn ? "描述你的行动..." : "等待你的回合..."}
+            placeholder={status !== "connected" ? "正在连接服务器..." : isMyTurn ? "输入你的行动..." : "等待其他玩家行动..."}
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
@@ -548,7 +566,7 @@ export default function GamePage({ roomCode, playerId, isOwner, onLeave }) {
           </button>
         </div>
         <div className="text-xs text-gray-600 mt-1">
-          Enter 发送 | /d20 掷骰 | (OOC) 玩家对话
+          Enter 发送 | (OOC) 玩家对话
         </div>
       </div>
     </div>

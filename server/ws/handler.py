@@ -4,7 +4,7 @@ from services.room_manager import (
     get_room, add_player, remove_player, add_message, add_dice_log,
     save_snapshot, restore_snapshot
 )
-from services.ai_engine import process_action
+from services.ai_engine import process_action, resume_with_roll
 from services.dice import roll as do_roll
 
 CONNECTIONS: dict[str, list[WebSocket]] = {}  # {room_code: [ws, ...]}
@@ -43,6 +43,8 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
 
             if msg_type == "player_action":
                 await _handle_action(room, player, payload)
+            elif msg_type == "roll_confirm":
+                await _handle_roll_confirm(room, player)
             elif msg_type == "player_chat":
                 await _handle_chat(room, player, payload)
             elif msg_type == "dice_roll":
@@ -106,7 +108,7 @@ async def _handle_action(room, player, payload):
     add_message(code, player.id, "action", content)
     save_snapshot(code)
 
-    # Process through AI (streaming disabled for now - needs more testing)
+    # Process through AI
     try:
         ai_result = await process_action(room, content, char.name)
     except Exception as e:
@@ -114,7 +116,27 @@ async def _handle_action(room, player, payload):
         await _send_error_single(code, player.id, "命运之神暂时走神了，请重试")
         return
 
-    # Handle dice result
+    # If AI wants a dice roll, pause and ask the player
+    if ai_result.get("pending_roll"):
+        roll_args = ai_result["pending_roll"]
+        # Store pending state on the player (simple approach: store on room)
+        room["_pending_roll"] = {"player_id": player.id, "ai_result": ai_result, "roll_args": roll_args}
+        await _send_to_player(code, player.id, {
+            "type": "roll_request",
+            "payload": {
+                "dice": roll_args.get("dice", "d20"),
+                "reason": roll_args.get("reason", "判定"),
+                "character_name": roll_args.get("character_name", char.name),
+            },
+        })
+        # Also tell other players to wait
+        await _broadcast(code, {
+            "type": "gm_narrative_chunk",
+            "payload": {"content": f"（等待 {char.name} 掷骰...）", "turn_number": room["turn_number"]},
+        }, exclude=None)
+        return  # Stop here, wait for roll_confirm
+
+    # Handle dice result (from deferred roll or direct)
     if ai_result["dice_result"]:
         dr = ai_result["dice_result"]
         # Find character by name (from AI) then map to ID
@@ -272,6 +294,118 @@ async def _send_error(room_code: str, message: str):
     for ws in CONNECTIONS.get(room_code, []):
         try:
             await ws.send_json({"type": "error", "payload": {"message": message}})
+        except Exception:
+            pass
+
+
+async def _handle_roll_confirm(room, player):
+    code = room["code"]
+    pending = room.pop("_pending_roll", None)
+    if not pending or pending["player_id"] != player.id:
+        await _send_error_single(code, player.id, "没有待掷骰的请求")
+        return
+
+    ai_result = pending["ai_result"]
+    roll_args = pending["roll_args"]
+
+    # Execute the roll and resume AI
+    ai_result2 = await resume_with_roll(ai_result, roll_args)
+
+    # Now process the final result
+    await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
+
+
+async def _process_ai_result(room, code, ai_result, player, prev_state_changes=None):
+    """Process dice result, state changes, narrative from AI result."""
+    char = next((c for c in room["characters"] if c.player_id == player.id), None)
+
+    # Handle dice result
+    if ai_result.get("dice_result"):
+        dr = ai_result["dice_result"]
+        dice_char = next((c for c in room["characters"] if c.name == dr["character_name"]), char)
+        add_dice_log(code, dice_char.id, dr["expression"], dr["total"],
+                    {"rolls": dr["rolls"], "bonus": dr["bonus"]},
+                    dc=dr.get("dc"), success=dr.get("success"),
+                    is_critical=bool(dr.get("is_critical")))
+        add_message(code, None, "dice",
+                    f"{dr['character_name']} {dr['expression']} = {dr['total']}", metadata=dr)
+        dr["character_id"] = dice_char.id
+        await _broadcast(code, {"type": "gm_dice_result", "payload": dr})
+
+    # Handle state changes (both from first call and resume call)
+    all_state_changes = (prev_state_changes or []) + ai_result.get("state_changes", [])
+    for sc in all_state_changes:
+        sc_char = next((c for c in room["characters"] if c.name == sc["character_name"]), None)
+        if sc_char:
+            bar_delta = sc.get("bar_delta") or {}
+            for bar_name, delta in bar_delta.items():
+                if bar_name in sc_char.bars:
+                    bar = sc_char.bars[bar_name]
+                    bar["current"] = max(0, min(bar["current"] + delta, bar["max"]))
+            if sc.get("add_bar"):
+                ab = sc["add_bar"]
+                sc_char.bars[ab["name"]] = {"current": ab.get("current", 0), "max": ab.get("max", 0)}
+            if sc.get("remove_bar") and sc["remove_bar"] in sc_char.bars:
+                del sc_char.bars[sc["remove_bar"]]
+            if sc.get("add_item"):
+                sc_char.inventory.append(sc["add_item"])
+            if sc.get("remove_item") and sc["remove_item"] in sc_char.inventory:
+                sc_char.inventory.remove(sc["remove_item"])
+            if sc.get("add_status") and sc["add_status"] not in sc_char.statuses:
+                sc_char.statuses.append(sc["add_status"])
+            if sc.get("remove_status") and sc["remove_status"] in sc_char.statuses:
+                sc_char.statuses.remove(sc["remove_status"])
+
+        await _broadcast(code, {"type": "state_update", "payload": {
+            "character_id": sc_char.id if sc_char else "",
+            "character_name": sc["character_name"],
+            "bar_delta": sc.get("bar_delta", {}),
+            "add_bar": sc.get("add_bar"),
+            "remove_bar": sc.get("remove_bar"),
+            "add_item": sc.get("add_item"),
+            "remove_item": sc.get("remove_item"),
+            "add_status": sc.get("add_status"),
+            "remove_status": sc.get("remove_status"),
+            "narrative": sc["narrative"],
+        }})
+
+    # Narrative
+    if ai_result.get("narrative"):
+        add_message(code, None, "narrative", ai_result["narrative"])
+        await _broadcast(code, {"type": "gm_narrative", "payload": {
+            "content": ai_result["narrative"],
+            "turn_number": room["turn_number"],
+            "suggested_actions": ai_result.get("suggested_actions", []),
+        }})
+
+    # Next player
+    room["turn_number"] += 1
+    next_name = ai_result.get("next_player")
+    next_char = None
+    if next_name:
+        next_char = next((c for c in room["characters"] if c.name == next_name), None)
+    if not next_char and room["characters"]:
+        cur_idx = next((i for i, c in enumerate(room["characters"]) if c.id == char.id), 0) if char else 0
+        next_idx = (cur_idx + 1) % len(room["characters"])
+        next_char = room["characters"][next_idx]
+
+    if next_char:
+        room["current_player_id"] = next_char.player_id
+        await _broadcast(code, {"type": "turn_change", "payload": {
+            "current_player_id": next_char.player_id,
+            "player_name": next_char.name,
+            "turn_number": room["turn_number"],
+        }})
+
+    if ai_result.get("ending_suggested"):
+        await _broadcast(code, {"type": "game_ending_prompt", "payload": {"reason": ai_result["ending_suggested"]}})
+
+
+async def _send_to_player(room_code: str, player_id: str, message: dict):
+    """Send a message to a specific player only."""
+    for ws in CONNECTIONS.get(room_code, []):
+        try:
+            await ws.send_json(message)
         except Exception:
             pass
 

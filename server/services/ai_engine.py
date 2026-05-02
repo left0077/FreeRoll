@@ -185,14 +185,9 @@ async def process_action(room: dict, player_input: str, character_name: str,
     if tool_calls_data:
         for tc in tool_calls_data:
             if tc["name"] == "roll_dice":
-                dr = _execute_dice(tc["args"])
-                result["dice_result"] = dr
+                # Defer roll — handler will ask player to roll, then resume
+                result["pending_roll"] = tc
                 result["tool_calls_made"].append("roll_dice")
-                tool_results.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": json.dumps({"total": dr["total"], "rolls": dr["rolls"], "bonus": dr["bonus"]}, ensure_ascii=False),
-                })
             elif tc["name"] == "update_state":
                 result["state_changes"].append(tc["args"])
                 result["tool_calls_made"].append("update_state")
@@ -245,7 +240,94 @@ async def process_action(room: dict, player_input: str, character_name: str,
         result["suggested_actions"] = [a.strip() for a in actions_match.group(1).split("|") if a.strip()]
         narrative = re.sub(r'\[ACTIONS:.+?\]', '', narrative or "").strip()
 
+    # Store state for potential resume
+    result["_messages"] = messages
+    result["_tool_calls_data"] = tool_calls_data
+    result["_tool_results"] = tool_results
+    result["_extra"] = extra_fields
+    result["_partial_narrative"] = narrative
+
     result["narrative"] = (narrative or "").strip()
+    return result
+
+
+async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) -> dict:
+    """Resume AI after player confirmed a roll. Executes roll and gets final narrative."""
+    messages = prev_result["_messages"]
+    tool_calls_data = prev_result["_tool_calls_data"]
+    tool_results = list(prev_result["_tool_results"])
+    extra_fields = prev_result["_extra"]
+    narrative = prev_result["_partial_narrative"] or ""
+
+    # Find the pending roll_dice call and execute it
+    for tc in tool_calls_data:
+        if tc["name"] == "roll_dice":
+            dr = _execute_dice(dice_args or tc["args"])
+            tool_results.append({
+                "role": "tool",
+                "tool_call_id": tc["id"],
+                "content": json.dumps({"total": dr["total"], "rolls": dr["rolls"], "bonus": dr["bonus"]}, ensure_ascii=False),
+            })
+
+    # Build assistant message with all tool calls
+    assistant_msg = {
+        "role": "assistant",
+        "content": narrative,
+        "tool_calls": [
+            {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["args"], ensure_ascii=False)}}
+            for tc in tool_calls_data
+        ],
+    }
+    if extra_fields.get("reasoning_content"):
+        assistant_msg["reasoning_content"] = extra_fields["reasoning_content"]
+    messages.append(assistant_msg)
+    messages.extend(tool_results)
+
+    # Final call
+    try:
+        if on_chunk:
+            narrative2, _ = await _stream_call(messages, on_chunk)
+        else:
+            narrative2, _, _ = await _normal_call(messages)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        narrative2, _, _ = await _normal_call(messages)
+
+    full_narrative = (narrative or "") + (narrative2 or "")
+
+    # Parse markers
+    result = {
+        "narrative": "",
+        "dice_result": None,
+        "state_changes": prev_result.get("state_changes", []),
+        "next_player": None,
+        "ending_suggested": None,
+        "suggested_actions": [],
+    }
+
+    # Re-execute dice to include in result
+    for tc in tool_calls_data:
+        if tc["name"] == "roll_dice":
+            result["dice_result"] = _execute_dice(dice_args or tc["args"])
+            break
+
+    next_match = re.search(r'\[NEXT:(.+?)\]', full_narrative)
+    if next_match:
+        result["next_player"] = next_match.group(1).strip()
+        full_narrative = re.sub(r'\[NEXT:.+?\]', '', full_narrative).strip()
+
+    ending_match = re.search(r'\[ENDING:(.+?)\]', full_narrative)
+    if ending_match:
+        result["ending_suggested"] = ending_match.group(1).strip()
+        full_narrative = re.sub(r'\[ENDING:.+?\]', '', full_narrative).strip()
+
+    actions_match = re.search(r'\[ACTIONS:(.+?)\]', full_narrative)
+    if actions_match:
+        result["suggested_actions"] = [a.strip() for a in actions_match.group(1).split("|") if a.strip()]
+        full_narrative = re.sub(r'\[ACTIONS:.+?\]', '', full_narrative).strip()
+
+    result["narrative"] = full_narrative.strip()
     return result
 
 
