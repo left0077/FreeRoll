@@ -187,17 +187,9 @@ async def process_action(room: dict, player_input: str, character_name: str,
         "tool_calls_made": [],
     }
 
-    # First call (streaming if callback provided, fallback to normal on failure)
+    # First call always normal (may have tool calls, needs reasoning_content)
     extra_fields = {}
-    if on_chunk:
-        try:
-            narrative, tool_calls_data = await _stream_call(messages, on_chunk)
-        except Exception:
-            import traceback
-            traceback.print_exc()
-            narrative, tool_calls_data, extra_fields = await _normal_call(messages)
-    else:
-        narrative, tool_calls_data, extra_fields = await _normal_call(messages)
+    narrative, tool_calls_data, extra_fields = await _normal_call(messages)
 
     # Process tool calls from first response
     tool_results = []
@@ -237,8 +229,7 @@ async def process_action(room: dict, player_input: str, character_name: str,
                 else:
                     narrative2, _, _ = await _normal_call(messages)
             except Exception:
-                import traceback
-                traceback.print_exc()
+                import traceback; traceback.print_exc()
                 narrative2, _, _ = await _normal_call(messages)
             narrative = (narrative or "") + (narrative2 or "")
 
