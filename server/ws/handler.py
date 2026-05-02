@@ -185,15 +185,15 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — stop at --- separator
+    # Process through AI with streaming — stop at [SYSTEM] separator
     _sentinel_hit = False
 
     async def on_chunk(text: str):
         nonlocal _sentinel_hit
         if _sentinel_hit:
-            return  # Already past ---, discard everything
-        if "---" in text:
-            before = text.split("---", 1)[0]
+            return
+        if "[SYSTEM]" in text:
+            before = text.split("[SYSTEM]", 1)[0]
             if before:
                 await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": before, "turn_number": room["turn_number"]}})
             _sentinel_hit = True

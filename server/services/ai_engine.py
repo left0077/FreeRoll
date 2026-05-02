@@ -79,27 +79,21 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。你的职责�
 - 普通对话、观察、移动等无风险行动不需要掷骰
 
 ## 输出格式（严格遵守）
-所有回复分为两个部分，用 `---` 分隔：
+所有回复分为两个部分，用 `[SYSTEM]` 分隔：
 
 叙事部分（玩家可见）
----
+[SYSTEM]
 控制标记（玩家不可见）
-
-控制标记格式：
-- [NEXT:角色名] — 指定下一个行动的玩家
-- [ACTIONS:建议1|建议2|建议3] — 行动建议（必须输出！）
-- [PLOT:阶段编号:阶段名称] — 推进剧情主线
-- [NOTE:分类:内容] — 发现记录（npc/location/clue/event）
-- [ENDING:理由] — 建议结束游戏
 
 例如：
 走廊深处传来低沉的嘶吼，火把的光芒在石壁上投下不安的阴影。金鬃王握紧了长剑。
----
+[SYSTEM]
 [NEXT:金鬃王]
 [ACTIONS:举火把谨慎向前探查声音来源|退后到岔路口选择另一条路|大声喊话试探黑暗中是什么生物]
 [NOTE:location:地下城第二层，走廊尽头有不明生物]
 
-注意：`---` 前面的叙事部分是玩家看到的文字。`---` 后面的标记是系统指令，玩家不可见。
+注意：[SYSTEM] 前面的叙事部分是玩家看到的文字。[SYSTEM] 后面的标记是系统指令，玩家不可见。
+不要在叙事中使用 [SYSTEM] 这个词。
 
 ## 回合管理
 - 根据故事走向指定下一个行动的玩家
@@ -321,9 +315,9 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
 
 
 def _parse_mixed_response(text: str, result: dict):
-    """Split on --- : narrative before, control markers after."""
-    if "---" in text:
-        parts = text.split("---", 1)
+    """Split on [SYSTEM]: narrative before, control markers after."""
+    if "[SYSTEM]" in text:
+        parts = text.split("[SYSTEM]", 1)
         narrative_text = parts[0].strip()
         control_text = parts[1].strip() if len(parts) > 1 else ""
     else:
@@ -360,7 +354,7 @@ def _parse_mixed_response(text: str, result: dict):
             result["world_notes"] = existing
 
     # Clean narrative: strip any remaining inline markers
-    if not ("---" in text):
+    if "[SYSTEM]" not in text:
         narrative_text = re.sub(r'\[(?:NEXT|ACTIONS|ENDING|PLOT|NOTE):[^\]]*\]', '', narrative_text).strip()
 
     result["narrative"] = narrative_text
