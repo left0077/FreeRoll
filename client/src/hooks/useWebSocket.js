@@ -14,6 +14,9 @@ export function useWebSocket(roomCode, playerId) {
     const ready = wsRef.current?.readyState;
     if (ready === WebSocket.OPEN || ready === WebSocket.CONNECTING) return;
 
+    // Reset intentional close flag (may have been set by StrictMode double-mount)
+    intentionalCloseRef.current = false;
+
     const base = getBackendUrl();
     const wsUrl = base.replace(/^http/, "ws");
     const url = `${wsUrl}/ws/${roomCode}?player_id=${playerId}`;
