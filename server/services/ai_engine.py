@@ -65,18 +65,24 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。你的职责�
 ## 叙事原则
 - 用生动的文字描述场景、NPC 和事件，让所有玩家沉浸在故事中
 - 使用 rule-of-cool 原则：有趣 > 严格规则，鼓励玩家创造性行动
-- 描述简洁有力，每次叙事控制在 2-4 段，不要写小说
-- 不要在描述中替玩家做决定，不要假设玩家的反应
-- **必须使用角色名而非"你""我"等代词**。例如"艾林举起火把，火光映亮了石壁上的符文"而非"你举起火把"。这是多人游戏，所有玩家都能看到叙事，"你"会让其他人困惑
+- 描述简洁有力，每次叙事控制在 2-4 段
+- 必须使用角色名而非"你""我"等代词
+- 不要在描述中替玩家做决定
 
-## 裁决原则
-- 当玩家尝试有风险/不确定的行动时，调用 roll_dice 进行判定
-- 当玩家在描述中明确表达想掷骰、碰运气、赌一把、试试看等意图时，必须调用 roll_dice
-- 当行动导致角色状态变化时，调用 update_state
-- 不同世界观有不同的数值条（bars），不是只有HP。可能是 SAN、好感度、信用点等
-- 可根据剧情需要创建临时数值条（add_bar），如"倒计时：3回合"、"考试压力：50/100"
-- 临时数值条用完后记得 remove_bar 清理
-- 普通对话、观察、移动等无风险行动不需要掷骰
+## ⚠️ 状态更新（最高优先级 — 每次叙事必须检查）
+叙事中只要发生了以下任何情况，**必须**调用 update_state：
+| 情况 | 参数 |
+|------|------|
+| 角色受伤 | bar_delta: {"HP": -具体数值} |
+| 角色治疗 | bar_delta: {"HP": +具体数值} |
+| 数值条变化 | bar_delta: {"条名": 变化量} |
+| 获得物品 | add_item: "物品名" |
+| 消耗物品 | remove_item: "物品名" |
+| 新增状态 | add_status: "状态名" |
+| 解除状态 | remove_status: "状态名" |
+
+不要只在叙事中描述"他受伤了"就结束——必须实际调用 update_state 修改数值条。
+例如叙事写了"金鬃王的利爪撕开了你的肩膀" → 必须 bar_delta: {"HP": -4} + 叙事描述"肩膀鲜血直流"。
 
 ## 输出格式（严格遵守）
 所有回复分为两个部分，用 `[SYSTEM]` 分隔：
@@ -199,6 +205,7 @@ async def process_action(room: dict, player_input: str, character_name: str,
                 result["pending_roll"] = tc
                 result["tool_calls_made"].append("roll_dice")
             elif tc["name"] == "update_state":
+                print(f"[AI] update_state called: {json.dumps(tc['args'], ensure_ascii=False)[:200]}", flush=True)
                 result["state_changes"].append(tc["args"])
                 result["tool_calls_made"].append("update_state")
                 tool_results.append({

@@ -641,7 +641,8 @@ async def _handle_start_game(room, player, payload, ws, rid):
     room["status"] = "playing"
     room["turn_number"] = 0
     room["current_player_id"] = room["characters"][0].player_id
-    initial_scene = room["world_module"].get("content", {}).get("initial_scene", "冒险开始了...")
+    wm = room.get("world_module") or {}
+    initial_scene = wm.get("content", {}).get("initial_scene", "冒险开始了...")
     add_message(room["code"], None, "narrative", initial_scene)
 
     await _reply(ws, {"status": "playing"}, rid)
@@ -734,7 +735,7 @@ async def _handle_generate_character(room, player, payload, ws, rid):
     world_context = ""
     bar_info = ""
     if room.get("world_module"):
-        c = room["world_module"].get("content", room["world_module"])
+        c = (room.get("world_module") or {}).get("content", {})
         world_context = f"世界观：{c.get('overview', '')}"
         if c.get("bar_schema"):
             bar_info = f"数值条定义：{_json.dumps(c['bar_schema'], ensure_ascii=False)}"
