@@ -399,6 +399,7 @@ async def _normal_call(messages):
     if hasattr(msg, 'reasoning_content') and msg.reasoning_content:
         extra['reasoning_content'] = msg.reasoning_content
     # Return the full message dict to preserve all fields (reasoning_content etc.)
+    print(f"[AI_RAW] content={str(msg.content)[:300]}", flush=True)
     return msg.content, tools, msg.model_dump()
 
 
