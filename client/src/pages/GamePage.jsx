@@ -29,8 +29,22 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
 
   const { send, on, status } = ws;
 
+  const loadOnce = async () => {
+    try {
+      const data = await api(`/api/rooms/${roomCode}`);
+      setMessages(data.messages || []);
+      setPlayers(data.players || []);
+      setCharacters(data.characters || []);
+      setCurrentPlayerId(data.current_player_id);
+      setTurnNumber(data.turn_number);
+      if (data.world_module?.content) {
+        localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(data.world_module.content));
+      }
+    } catch (e) { console.error(e); }
+  };
+
   useEffect(() => {
-    return () => {};
+    loadOnce();
   }, [roomCode]);
 
   useEffect(() => {
