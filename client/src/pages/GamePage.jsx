@@ -25,6 +25,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
   const [diceHistory, setDiceHistory] = useState([]);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [suggestedActions, setSuggestedActions] = useState([]);
+  const [storyline, setStoryline] = useState(null); // {title, stages: ["name", "??", ...]}
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
@@ -84,6 +85,9 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       setTurnNumber(payload.turn_number);
       if (payload.world_module?.content) {
         localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(payload.world_module.content));
+        if (payload.world_module.content.storyline) {
+          setStoryline(payload.world_module.content.storyline);
+        }
       }
       if (type === "game_started") return;
     }
@@ -177,6 +181,9 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         if (!payload.player_id || payload.player_id === playerId) {
           setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: `❌ ${payload.message}` }]);
         }
+        break;
+      case "plot_updated":
+        setStoryline(payload.storyline);
         break;
       case "game_ending_prompt":
         setEndingPrompt(payload.reason);
@@ -318,6 +325,25 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
           <span className="text-gray-600 text-xs ml-1">回合 {turnNumber}</span>
         </div>
       </div>
+
+      {/* Storyline progress */}
+      {storyline && (
+        <div className="px-3 py-1.5 bg-gray-900/70 border-b border-gray-800 shrink-0">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-amber-400 font-bold whitespace-nowrap">{storyline.title}</span>
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {storyline.stages.map((s, i) => (
+                <div key={i} className="flex items-center gap-1 shrink-0">
+                  {i > 0 && <span className="text-gray-700">▸</span>}
+                  <span className={`px-1.5 py-0.5 rounded ${s === "??" ? "text-gray-600 bg-gray-800/50" : s === "__done__" ? "text-green-400 bg-green-900/20" : "text-amber-300 bg-amber-900/20"}`}>
+                    {s === "??" ? "???" : s}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 relative">

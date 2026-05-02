@@ -88,8 +88,15 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。你的职责�
 - 如果当前场景有危险，至少有一个建议是应对危险的行动
 - 如果当前场景有NPC，至少有一个建议是与之交互的行动
 
+## 剧情主线
+- 游戏有主线剧情（storyline），分多个阶段。当玩家完成一个阶段时，推进主线
+- 如果玩家发现了新的重要情报或剧情转折，可以更新后续阶段的内容
+- 推进主线格式：[PLOT:阶段编号:阶段名称]。例如 [PLOT:1:发现暗门入口] 表示第1阶段完成，名称更新为"发现暗门入口"
+- 阶段编号从0开始。先完成阶段0才能推进到阶段1
+- 如果剧情发生重大转折，可以修改后续阶段名称：[PLOT:2:??] 表示将第2阶段重置为未知
+
 ## 游戏结束
-- 当剧情自然收尾（任务完成、谜题解开、Boss 击败等），输出 [ENDING:简短理由]
+- 当剧情自然收尾（任务完成、谜题解开、Boss击败等），输出 [ENDING:简短理由]
 - 不要在剧情中途随意建议结束
 
 ## 玩家间对话
@@ -240,6 +247,12 @@ async def process_action(room: dict, player_input: str, character_name: str,
         result["suggested_actions"] = [a.strip() for a in actions_match.group(1).split("|") if a.strip()]
         narrative = re.sub(r'\[ACTIONS:.+?\]', '', narrative or "").strip()
 
+    # Parse plot progression
+    plot_match = re.search(r'\[PLOT:(\d+):(.+?)\]', narrative or "")
+    if plot_match:
+        result["plot_update"] = {"stage": int(plot_match.group(1)), "name": plot_match.group(2).strip()}
+        narrative = re.sub(r'\[PLOT:\d+:.+?\]', '', narrative or "").strip()
+
     # Store state for potential resume
     result["_messages"] = messages
     result["_tool_calls_data"] = tool_calls_data
@@ -326,6 +339,11 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
     if actions_match:
         result["suggested_actions"] = [a.strip() for a in actions_match.group(1).split("|") if a.strip()]
         full_narrative = re.sub(r'\[ACTIONS:.+?\]', '', full_narrative).strip()
+
+    plot_match = re.search(r'\[PLOT:(\d+):(.+?)\]', full_narrative)
+    if plot_match:
+        result["plot_update"] = {"stage": int(plot_match.group(1)), "name": plot_match.group(2).strip()}
+        full_narrative = re.sub(r'\[PLOT:\d+:.+?\]', '', full_narrative).strip()
 
     result["narrative"] = full_narrative.strip()
     return result

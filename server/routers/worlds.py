@@ -15,8 +15,10 @@ TEMPLATES = {
         "overview": "一个古老的地下城中埋藏着失落的宝藏。黑暗的走廊中回荡着未知生物的嘶吼。",
         "factions": ["冒险者公会", "地城守卫者", "暗影教团"],
         "rules": ["D&D 5e 基础规则", "地城中每探索一个新房间需要掷察觉检定"],
-        "bar_schema": {
-            "HP": {"default": 20, "description": "生命值，归零则昏迷"},
+        "bar_schema": {"HP": {"default": 20, "description": "生命值，归零则昏迷"}},
+        "storyline": {
+            "title": "失落宝藏",
+            "stages": ["??", "??", "??", "??"],
         },
     },
     "cthulhu_investigation": {
@@ -24,9 +26,10 @@ TEMPLATES = {
         "overview": "1920年代的新英格兰，一系列离奇事件指向某个不可名状的存在。理智是比生命更珍贵的资源。",
         "factions": ["调查员", "密斯卡托尼克大学", "深潜者教派"],
         "rules": ["COC 7e 简化规则", "目睹恐怖事物需掷 SAN CHECK", "SAN 归零则角色陷入疯狂"],
-        "bar_schema": {
-            "HP": {"default": 12, "description": "生命值"},
-            "SAN": {"default": 60, "description": "理智值，归零陷入疯狂"},
+        "bar_schema": {"HP": {"default": 12, "description": "生命值"}, "SAN": {"default": 60, "description": "理智值，归零陷入疯狂"}},
+        "storyline": {
+            "title": "不可名状的真相",
+            "stages": ["??", "??", "??"],
         },
     },
     "cyberpunk_bar": {
@@ -34,9 +37,10 @@ TEMPLATES = {
         "overview": "2077年，霓虹灯下的夜之城。一间名为'自由落体'的酒吧里，佣兵、黑客和公司特工在此交汇。",
         "factions": ["街头佣兵", "荒坂公司", "网络黑客", "漩涡帮"],
         "rules": ["赛博朋克简易规则", "黑客行为需掷技术检定", "植入体可提供加成"],
-        "bar_schema": {
-            "HP": {"default": 20, "description": "生命值"},
-            "信用点": {"default": 500, "description": "电子货币，用于购买装备和信息"},
+        "bar_schema": {"HP": {"default": 20, "description": "生命值"}, "信用点": {"default": 500, "description": "电子货币，用于购买装备和信息"}},
+        "storyline": {
+            "title": "夜之城暗流",
+            "stages": ["??", "??", "??"],
         },
     },
 }
@@ -81,6 +85,7 @@ async def api_generate_world(req: GenerateRequest):
                 "factions": template["factions"],
                 "custom_rules": template["rules"],
                 "bar_schema": template.get("bar_schema", {}),
+                "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}),
                 "initial_scene": initial_scene,
             },
             "preset_characters": [],

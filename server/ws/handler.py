@@ -286,6 +286,17 @@ async def _handle_action(room, player, payload):
             },
         })
 
+    # Plot progression
+    plot = ai_result.get("plot_update")
+    if plot:
+        wm = room.get("world_module")
+        if wm and wm.get("content", {}).get("storyline"):
+            stages = wm["content"]["storyline"]["stages"]
+            idx = plot["stage"]
+            if 0 <= idx < len(stages):
+                stages[idx] = plot["name"]
+                await _broadcast(code, {"type": "plot_updated", "payload": {"storyline": wm["content"]["storyline"]}})
+
     # Ending suggestion
     if ai_result.get("ending_suggested"):
         await _broadcast(code, {
@@ -447,6 +458,17 @@ async def _process_ai_result(room, code, ai_result, player, prev_state_changes=N
             "player_name": next_char.name,
             "turn_number": room["turn_number"],
         }})
+
+    # Plot progression
+    plot = ai_result.get("plot_update")
+    if plot:
+        wm = room.get("world_module")
+        if wm and wm.get("content", {}).get("storyline"):
+            stages = wm["content"]["storyline"]["stages"]
+            idx = plot["stage"]
+            if 0 <= idx < len(stages):
+                stages[idx] = plot["name"]
+                await _broadcast(code, {"type": "plot_updated", "payload": {"storyline": wm["content"]["storyline"]}})
 
     if ai_result.get("ending_suggested"):
         await _broadcast(code, {"type": "game_ending_prompt", "payload": {"reason": ai_result["ending_suggested"]}})
