@@ -193,23 +193,31 @@ async def _do_handle_action(room, player, payload):
     async def on_chunk(text: str):
         nonlocal _buf
         _buf += text
-        # While buffer starts with a known marker, strip it
+        # Find first marker start position in buffer
         while True:
-            stripped = False
+            first_marker = -1
+            first_prefix = ""
             for prefix in _MARKER_STARTS:
-                if _buf.startswith(prefix):
-                    end = _buf.find("]", len(prefix))
-                    if end >= 0:
-                        _buf = _buf[end + 1:]  # Remove complete marker
-                        stripped = True
-                        break
-            if not stripped:
-                break
-        # If buffer doesn't start with a potential marker, send it
+                pos = _buf.find(prefix)
+                if pos >= 0 and (first_marker < 0 or pos < first_marker):
+                    first_marker = pos
+                    first_prefix = prefix
+            if first_marker < 0:
+                break  # No marker in buffer
+            # Send text before the marker
+            if first_marker > 0:
+                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf[:first_marker], "turn_number": room["turn_number"]}})
+                _buf = _buf[first_marker:]
+            # Try to strip complete marker
+            end = _buf.find("]", len(first_prefix))
+            if end >= 0:
+                _buf = _buf[end + 1:]  # Remove complete marker
+            else:
+                break  # Marker incomplete, wait for more
+        # Send remaining non-marker text
         if _buf and not _buf.startswith("["):
             await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
             _buf = ""
-        # If buffer starts with [ but doesn't match known markers, after 100 chars flush it
         elif len(_buf) > 100:
             await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
             _buf = ""
