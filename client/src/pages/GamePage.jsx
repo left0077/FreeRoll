@@ -243,8 +243,6 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       const trySend = () => {
         if (send("player_action", { content })) {
           setProcessing(true);
-          // Safety timeout: if no response in 45s, reset processing
-          setTimeout(() => setProcessing((p) => { if (p) { setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: "❌ 响应超时，请重试" }]); } return false; }), 45000);
           return;
         }
         retries++;
@@ -255,8 +253,6 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         }
       };
       trySend();
-    } else {
-      setTimeout(() => setProcessing((p) => { if (p) { setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: "❌ 响应超时，请重试" }]); } return false; }), 45000);
     }
   };
 
