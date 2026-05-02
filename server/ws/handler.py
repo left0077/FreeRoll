@@ -151,7 +151,7 @@ async def _do_handle_action(room, player, payload):
 
     # Validate game state
     if room["status"] != "playing":
-        await _send_error(code, "游戏尚未开始或已结束")
+        await _send_error_single(code, player.id, "游戏尚未开始或已结束")
         return
 
     # Validate it's this player's turn
@@ -209,12 +209,17 @@ async def _do_handle_action(room, player, payload):
         import asyncio
         async def auto_roll():
             await asyncio.sleep(30)
+            if room.get("status") != "playing":  # Game ended during wait
+                return
             pending = room.get("_pending_roll")
             if pending and pending["player_id"] == player.id:
                 room.pop("_pending_roll", None)
-                ai_result2 = await resume_with_roll(ai_result, roll_args)
-                await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
-                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": "（自动掷骰）", "turn_number": room["turn_number"]}})
+                try:
+                    ai_result2 = await resume_with_roll(ai_result, roll_args)
+                    await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
+                    await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": "（自动掷骰）", "turn_number": room["turn_number"]}})
+                except Exception:
+                    pass
         asyncio.create_task(auto_roll())
         return  # Stop here, wait for roll_confirm or auto-roll
 
@@ -757,6 +762,8 @@ def _build_room_state(room: dict) -> dict:
 async def _send_error_single(room_code: str, player_id: str, message: str):
     """Send error to a specific player only."""
     for ws in CONNECTIONS.get(room_code, []):
+        if getattr(ws, '_freeroll_pid', None) != player_id:
+            continue
         try:
             await ws.send_json({"type": "error", "payload": {"message": message, "player_id": player_id}})
         except Exception:
