@@ -107,9 +107,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         break;
       case "gm_narrative":
         setMessages((prev) => [...prev, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }]);
-        if (payload.suggested_actions?.length > 0) {
-          setSuggestedActions(payload.suggested_actions);
-        }
+        setSuggestedActions(payload.suggested_actions || []);
         setProcessing(false);
         break;
       case "gm_dice_result":
@@ -162,6 +160,8 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       case "turn_change":
         setCurrentPlayerId(payload.current_player_id);
         setTurnNumber(payload.turn_number);
+        // Clear old suggestions when turn changes — new ones come with next narrative
+        if (payload.current_player_id !== playerId) setSuggestedActions([]);
         break;
       case "typing_indicator":
         setTypingPlayers((prev) => {
