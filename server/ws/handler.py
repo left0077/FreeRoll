@@ -218,6 +218,9 @@ async def _do_handle_action(room, player, payload):
         if _buf and _state == "stream":
             await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
     except Exception as e:
+        import traceback
+        print(f"ERROR in _do_handle_action: {e}", flush=True)
+        traceback.print_exc()
         room["messages"] = [m for m in room["messages"] if m.get("content") != content or m.get("type") != "action"]
         await _send_error_single(code, player.id, "命运之神暂时走神了，请重试")
         return
