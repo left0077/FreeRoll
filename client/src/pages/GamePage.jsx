@@ -60,8 +60,8 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
   }, [messages, typingPlayers, streamingText]);
 
   const handleMessage = useCallback((type, payload) => {
-    // room_state replaces HTTP GET — all state comes through WebSocket
-    if (type === "room_state") {
+    // room_state or game_started — full state init via WebSocket
+    if (type === "room_state" || type === "game_started") {
       setMessages(payload.messages || []);
       setPlayers(payload.players || []);
       setCharacters(payload.characters || []);
@@ -70,7 +70,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       if (payload.world_module?.content) {
         localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(payload.world_module.content));
       }
-      return;
+      if (type === "game_started") return;
     }
 
     switch (type) {

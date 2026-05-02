@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.room_manager import create_room, get_room, delete_room, add_player, add_message, restore_snapshot
 from services.ai_engine import process_action
-from ws.handler import _broadcast
+from ws.handler import _broadcast, _build_room_state
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 
@@ -109,10 +109,9 @@ async def api_start_game(code: str, player_id: str):
     await _broadcast(code.upper(), {
         "type": "game_started",
         "payload": {
+            **{k: v for k, v in _build_room_state(room).items() if k != "world_module"},
             "initial_scene": initial_scene,
-            "turn_order": [c.name for c in room["characters"]],
-            "first_player_id": room["current_player_id"],
-            "first_player_name": room["characters"][0].name,
+            "first_player_name": room["characters"][0].name if room["characters"] else "",
         },
     })
 
