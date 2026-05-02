@@ -187,10 +187,13 @@ async def _do_handle_action(room, player, payload):
 
     # Process through AI with streaming — strip control markers before sending
     import re as _re
-    _marker_re = _re.compile(r'\[(?:NEXT|ACTIONS|ENDING|PLOT|NOTE):[^\]]*\]')
+    _marker_re = _re.compile(r'\[(?:NEXT|ACTIONS|ENDING|PLOT|NOTE):[^\]]{0,80}\]')
 
     async def on_chunk(text: str):
         clean = _marker_re.sub('', text)
+        # Also strip partial marker starts like "[NEX" or "[ACT" at end of chunk
+        clean = _re.sub(r'\[(?:NEX?|ACT?|END?|PLO?|NOT?)$', '', clean)
+        clean = _re.sub(r'^[^\[]*\](?!\w)', '', clean)  # Strip orphaned closing brackets
         if clean:
             await _broadcast(code, {
                 "type": "gm_narrative_chunk",
