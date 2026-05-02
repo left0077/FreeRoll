@@ -1,4 +1,5 @@
 import json
+import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from services.room_manager import (
     get_room, add_player, remove_player, add_message, add_dice_log,
@@ -184,9 +185,15 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI
+    # Process through AI with streaming
+    async def on_chunk(text: str):
+        await _broadcast(code, {
+            "type": "gm_narrative_chunk",
+            "payload": {"content": text, "turn_number": room["turn_number"]},
+        })
+
     try:
-        ai_result = await process_action(room, content, char.name)
+        ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
     except Exception as e:
         room["messages"] = [m for m in room["messages"] if m.get("content") != content or m.get("type") != "action"]
         await _send_error_single(code, player.id, "命运之神暂时走神了，请重试")
@@ -326,6 +333,36 @@ async def _do_handle_action(room, player, payload):
                 "turn_number": room["turn_number"],
             },
         })
+        # Start auto-skip timer if next player is disconnected
+        import asyncio
+        next_pid = next_char.player_id
+        current_turn = room["turn_number"]
+        async def auto_skip():
+            await asyncio.sleep(60)
+            if room.get("status") != "playing":
+                return
+            if room.get("current_player_id") != next_pid:
+                return  # Player already acted or turn changed
+            if room.get("turn_number") != current_turn:
+                return  # Turn already advanced
+            next_p = next((p for p in room["players"] if p.id == next_pid), None)
+            if next_p and next_p.is_online:
+                return  # Player reconnected
+            # Auto-skip: send a generic skip action
+            skip_char = next((c for c in room["characters"] if c.player_id == next_pid), None)
+            if skip_char:
+                add_message(code, next_pid, "action", "（因断线自动跳过回合）")
+                await _broadcast(code, {"type": "player_action_broadcast", "payload": {"id": str(uuid.uuid4()), "player_id": next_pid, "content": "（因断线自动跳过回合）", "turn_number": room["turn_number"]}})
+                add_message(code, None, "narrative", f"{skip_char.name} 因断线未能行动。")
+                await _broadcast(code, {"type": "gm_narrative", "payload": {"content": f"{skip_char.name} 因断线未能行动，回合自动跳过。", "turn_number": room["turn_number"], "suggested_actions": []}})
+                # Advance to next player
+                cur_idx = next((i for i, c in enumerate(room["characters"]) if c.player_id == next_pid), 0)
+                next_idx = (cur_idx + 1) % len(room["characters"])
+                nn_char = room["characters"][next_idx]
+                room["turn_number"] += 1
+                room["current_player_id"] = nn_char.player_id
+                await _broadcast(code, {"type": "turn_change", "payload": {"current_player_id": nn_char.player_id, "player_name": nn_char.name, "turn_number": room["turn_number"]}})
+        asyncio.create_task(auto_skip())
 
     # World book notes
     notes = ai_result.get("world_notes", [])

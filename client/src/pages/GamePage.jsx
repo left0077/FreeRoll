@@ -86,6 +86,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       setCurrentPlayerId(payload.current_player_id);
       setTurnNumber(payload.turn_number);
       setDiscoveries(payload.discoveries || []);
+      setStreamingText("");  // Clean state on reconnect
       if (payload.world_module?.content) {
         localStorage.setItem("freeroll_world_" + roomCode, JSON.stringify(payload.world_module.content));
         setStoryline(payload.world_module.content.storyline || { title: "冒险之旅", stages: ["??", "??"] });
@@ -113,9 +114,18 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         setProcessing(false);
         break;
       case "gm_narrative":
-        setMessages((prev) => [...prev, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }]);
+        // If streaming chunks arrived, move that text to messages; otherwise add new
+        setStreamingText((prev) => {
+          if (prev && prev !== payload.content) {
+            // Streaming was active — finalize accumulated text
+            setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: prev, turn_number: payload.turn_number }]);
+          } else if (!prev) {
+            // No streaming — add the full text directly
+            setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }]);
+          }
+          return "";
+        });
         setSuggestedActions(payload.suggested_actions || []);
-        setStreamingText("");  // Clear any leftover streaming text like "等待掷骰..."
         setProcessing(false);
         break;
       case "gm_dice_result":
