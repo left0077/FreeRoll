@@ -1,0 +1,343 @@
+from __future__ import annotations
+
+import re
+import json
+from openai import AsyncOpenAI
+from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+
+client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=30.0)
+
+ROLL_DICE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "roll_dice",
+        "description": "当需要判定玩家行动结果时掷骰。rule-of-cool 原则下，有意义的行动才掷骰。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dice": {"type": "string", "description": "骰子表达式，如 d20, 2d6+3, d100"},
+                "reason": {"type": "string", "description": "掷骰原因"},
+                "difficulty": {"type": "integer", "description": "DC 难度等级，可选"},
+                "character_name": {"type": "string", "description": "行动角色名"},
+            },
+            "required": ["dice", "reason", "character_name"],
+        },
+    },
+}
+
+UPDATE_STATE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "update_state",
+        "description": "当行动导致角色数值变化时调用。可修改任意数值条、增删物品/状态，甚至创建临时数值条。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "character_name": {"type": "string"},
+                "bar_delta": {
+                    "type": "object",
+                    "description": "数值条变化，key是条名，value是变化量。如 {\"HP\": -3, \"SAN\": -5, \"好感度\": 10}",
+                    "additionalProperties": {"type": "integer"},
+                },
+                "add_item": {"type": "string", "description": "获得物品"},
+                "remove_item": {"type": "string", "description": "失去物品"},
+                "add_status": {"type": "string", "description": "新增状态"},
+                "remove_status": {"type": "string", "description": "移除状态"},
+                "add_bar": {
+                    "type": "object",
+                    "description": "创建临时数值条，如倒计时。含current和max",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "current": {"type": "integer"},
+                        "max": {"type": "integer"},
+                    },
+                },
+                "remove_bar": {"type": "string", "description": "移除临时数值条（条名）"},
+                "narrative": {"type": "string", "description": "状态变化的叙事描述"},
+            },
+            "required": ["character_name", "narrative"],
+        },
+    },
+}
+
+SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。你的职责：
+
+## 叙事原则
+- 用生动的文字描述场景、NPC 和事件，让玩家沉浸在故事中
+- 使用 rule-of-cool 原则：有趣 > 严格规则，鼓励玩家创造性行动
+- 描述简洁有力，每次叙事控制在 2-4 段，不要写小说
+- 不要在描述中替玩家做决定，不要假设玩家的反应
+
+## 裁决原则
+- 当玩家尝试有风险/不确定的行动时，调用 roll_dice 进行判定
+- 当行动导致角色状态变化时，调用 update_state
+- 不同世界观有不同的数值条（bars），不是只有HP。可能是 SAN、好感度、信用点等
+- 可根据剧情需要创建临时数值条（add_bar），如"倒计时：3回合"、"考试压力：50/100"
+- 临时数值条用完后记得 remove_bar 清理
+- 普通对话、观察、移动等无风险行动不需要掷骰
+
+## 回合管理
+- 每次叙事末尾，根据故事走向指定下一个应该行动的玩家
+- 格式：[NEXT:角色名]
+- 让每个玩家都有参与机会，不要让一个人连续行动超过 2 回合
+
+## 行动建议（必须遵守）
+- 每次叙事末尾，你必须为下一个行动的玩家提供 3 个贴合当前场景的具体行动建议
+- 格式：[ACTIONS:具体行动1|具体行动2|具体行动3]
+- 行动建议必须贴合当前场景的具体细节。好的例子："用火把照向墙壁寻找暗门入口"、"俯身检查石板上的符文刻痕"。坏的例子："我检查房间"、"我搜索物品"
+- 如果当前场景有危险，至少有一个建议是应对危险的行动
+- 如果当前场景有NPC，至少有一个建议是与之交互的行动
+
+## 游戏结束
+- 当剧情自然收尾（任务完成、谜题解开、Boss 击败等），输出 [ENDING:简短理由]
+- 不要在剧情中途随意建议结束
+
+## 玩家间对话
+- 玩家可以用 (OOC) 标记进行场外对话，这些消息不需要你回应
+"""
+
+
+def build_messages(room: dict, player_input: str, player_character_name: str) -> list:
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # World module
+    wm = room.get("world_module")
+    if wm:
+        world_text = _format_world_module(wm)
+        messages.append({"role": "system", "content": world_text})
+
+    # Character roster
+    chars_text = _format_characters(room["characters"])
+    messages.append({"role": "system", "content": chars_text})
+
+    # Full chat history
+    for msg in room["messages"]:
+        role = _msg_role(msg)
+        content = msg["content"]
+        if role:
+            messages.append({"role": role, "content": content})
+
+    # Current player input
+    messages.append({"role": "user", "content": f"[{player_character_name}]: {player_input}"})
+
+    return messages
+
+
+def _format_world_module(wm: dict) -> str:
+    c = wm.get("content", wm)
+    parts = [f"## 世界观：{c.get('overview', '')}"]
+    if c.get("factions"):
+        parts.append(f"## 势力/种族：{json.dumps(c['factions'], ensure_ascii=False)}")
+    if c.get("custom_rules"):
+        parts.append(f"## 特色规则：{json.dumps(c['custom_rules'], ensure_ascii=False)}")
+    if c.get("initial_scene"):
+        parts.append(f"## 初始场景：{c['initial_scene']}")
+    return "\n\n".join(parts)
+
+
+def _format_characters(characters: list) -> str:
+    lines = ["## 当前角色："]
+    for c in characters:
+        bar_strs = []
+        for name, bar in c.bars.items():
+            bar_strs.append(f"{name} {bar['current']}/{bar['max']}")
+        tags_str = '/'.join(c.tags) if c.tags else '冒险者'
+        lines.append(f"- {c.name}（{tags_str}）：{', '.join(bar_strs) if bar_strs else '无特殊数值'}")
+    return "\n".join(lines)
+
+
+def _msg_role(msg: dict) -> str | None:
+    if msg["type"] in ("action", "ooc"):
+        return "user"
+    if msg["type"] in ("narrative", "dice", "system"):
+        return "assistant"
+    return None
+
+
+async def process_action(room: dict, player_input: str, character_name: str,
+                        on_chunk=None) -> dict:
+    """Process a player action. If on_chunk is provided, streams text chunks."""
+    messages = build_messages(room, player_input, character_name)
+
+    result = {
+        "narrative": "",
+        "dice_result": None,
+        "state_changes": [],
+        "next_player": None,
+        "ending_suggested": None,
+        "tool_calls_made": [],
+    }
+
+    # First call (streaming if callback provided, fallback to normal on failure)
+    extra_fields = {}
+    if on_chunk:
+        try:
+            narrative, tool_calls_data = await _stream_call(messages, on_chunk)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            narrative, tool_calls_data, extra_fields = await _normal_call(messages)
+    else:
+        narrative, tool_calls_data, extra_fields = await _normal_call(messages)
+
+    # Process tool calls from first response
+    tool_results = []
+    if tool_calls_data:
+        for tc in tool_calls_data:
+            if tc["name"] == "roll_dice":
+                dr = _execute_dice(tc["args"])
+                result["dice_result"] = dr
+                result["tool_calls_made"].append("roll_dice")
+                tool_results.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": json.dumps({"total": dr["total"], "rolls": dr["rolls"], "bonus": dr["bonus"]}, ensure_ascii=False),
+                })
+            elif tc["name"] == "update_state":
+                result["state_changes"].append(tc["args"])
+                result["tool_calls_made"].append("update_state")
+                tool_results.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": "状态已更新",
+                })
+
+        # Second call to get final narrative (streaming if callback)
+        if tool_results:
+            assistant_msg = {
+                "role": "assistant",
+                "content": narrative or "",
+                "tool_calls": [
+                    {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["args"], ensure_ascii=False)}}
+                    for tc in tool_calls_data
+                ],
+            }
+            # Preserve reasoning_content for DeepSeek thinking mode
+            if extra_fields.get("reasoning_content"):
+                assistant_msg["reasoning_content"] = extra_fields["reasoning_content"]
+            messages.append(assistant_msg)
+            messages.extend(tool_results)
+            try:
+                if on_chunk:
+                    narrative2, _ = await _stream_call(messages, on_chunk)
+                else:
+                    narrative2, _, _ = await _normal_call(messages)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                narrative2, _, _ = await _normal_call(messages)
+            narrative = (narrative or "") + (narrative2 or "")
+
+    # Parse markers
+    next_match = re.search(r'\[NEXT:(.+?)\]', narrative or "")
+    if next_match:
+        result["next_player"] = next_match.group(1).strip()
+        narrative = re.sub(r'\[NEXT:.+?\]', '', narrative or "").strip()
+
+    ending_match = re.search(r'\[ENDING:(.+?)\]', narrative or "")
+    if ending_match:
+        result["ending_suggested"] = ending_match.group(1).strip()
+        narrative = re.sub(r'\[ENDING:.+?\]', '', narrative or "").strip()
+
+    # Parse action suggestions
+    actions_match = re.search(r'\[ACTIONS:(.+?)\]', narrative or "")
+    if actions_match:
+        result["suggested_actions"] = [a.strip() for a in actions_match.group(1).split("|") if a.strip()]
+        narrative = re.sub(r'\[ACTIONS:.+?\]', '', narrative or "").strip()
+
+    result["narrative"] = (narrative or "").strip()
+    return result
+
+
+async def _normal_call(messages):
+    resp = await client.chat.completions.create(
+        model=DEEPSEEK_MODEL, messages=messages,
+        tools=[ROLL_DICE_TOOL, UPDATE_STATE_TOOL],
+        temperature=0.8, max_tokens=1024,
+    )
+    msg = resp.choices[0].message
+    tools = []
+    if msg.tool_calls:
+        for tc in msg.tool_calls:
+            tools.append({"id": tc.id, "name": tc.function.name,
+                          "args": json.loads(tc.function.arguments)})
+    # Preserve reasoning_content for multi-turn thinking mode
+    extra = {}
+    if hasattr(msg, 'reasoning_content') and msg.reasoning_content:
+        extra['reasoning_content'] = msg.reasoning_content
+    return msg.content, tools, extra
+
+
+async def _stream_call(messages, on_chunk):
+    """Stream call: call on_chunk(text) for each token, return (full_text, tools)."""
+    stream = await client.chat.completions.create(
+        model=DEEPSEEK_MODEL, messages=messages,
+        tools=[ROLL_DICE_TOOL, UPDATE_STATE_TOOL],
+        temperature=0.8, max_tokens=1024,
+        stream=True,
+    )
+
+    content = ""
+    tool_calls_acc = {}  # {index: {id, name, args_str}}
+
+    async for chunk in stream:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if not delta:
+            continue
+
+        # Text content
+        if delta.content:
+            content += delta.content
+            await on_chunk(delta.content)
+
+        # Tool calls (accumulated across chunks)
+        if delta.tool_calls:
+            for tc_delta in delta.tool_calls:
+                idx = tc_delta.index
+                if idx not in tool_calls_acc:
+                    tool_calls_acc[idx] = {"id": "", "name": "", "args_str": ""}
+                if tc_delta.id:
+                    tool_calls_acc[idx]["id"] = tc_delta.id
+                if tc_delta.function:
+                    if tc_delta.function.name:
+                        tool_calls_acc[idx]["name"] = tc_delta.function.name
+                    if tc_delta.function.arguments:
+                        tool_calls_acc[idx]["args_str"] += tc_delta.function.arguments
+
+    # Parse accumulated tool calls
+    tools = []
+    for tc in tool_calls_acc.values():
+        try:
+            args = json.loads(tc["args_str"]) if tc["args_str"] else {}
+        except json.JSONDecodeError:
+            args = {}
+        tools.append({"id": tc["id"], "name": tc["name"], "args": args})
+
+    return content, tools
+
+
+def _execute_dice(args: dict) -> dict:
+    from services.dice import roll as do_roll, check_critical
+    dice_result = do_roll(args["dice"])
+    sides = _extract_sides(args["dice"])
+    crit = check_critical(dice_result["rolls"], sides) if sides else None
+    dc = args.get("difficulty")
+    success = None
+    if dc is not None:
+        success = dice_result["total"] >= dc
+    return {
+        "character_name": args["character_name"],
+        "expression": args["dice"],
+        "total": dice_result["total"],
+        "rolls": dice_result["rolls"],
+        "bonus": dice_result["bonus"],
+        "dc": dc,
+        "success": success,
+        "is_critical": crit,
+        "reason": args["reason"],
+    }
+
+
+def _extract_sides(expression: str) -> int:
+    match = re.search(r'd(\d+)', expression)
+    return int(match.group(1)) if match else 0

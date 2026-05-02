@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-gray-950 text-gray-100 antialiased;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+}
+
+/* Dice animation */
+@keyframes dice-roll {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(1.3); }
+  50% { transform: rotate(180deg) scale(0.8); }
+  75% { transform: rotate(270deg) scale(1.2); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.dice-rolling {
+  animation: dice-roll 0.6s ease-out;
+}
+
+/* Critical effect */
+@keyframes critical-glow {
+  0%, 100% { box-shadow: 0 0 5px #fbbf24; }
+  50% { box-shadow: 0 0 30px #fbbf24, 0 0 60px #f59e0b; }
+}
+
+.critical-success {
+  animation: critical-glow 0.8s ease-in-out 3;
+  border-color: #fbbf24;
+}
+
+@keyframes critical-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(2px); }
+}
+
+.critical-failure {
+  animation: critical-shake 0.4s ease-in-out 2;
+  border-color: #ef4444;
+}
+
+/* Typing dots */
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-4px); }
+}
+
+.typing-dot {
+  animation: typing-dot 1.4s infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 2px;
+}

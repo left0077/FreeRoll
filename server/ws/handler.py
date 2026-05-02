@@ -1,0 +1,285 @@
+import json
+from fastapi import WebSocket, WebSocketDisconnect
+from services.room_manager import (
+    get_room, add_player, remove_player, add_message, add_dice_log,
+    save_snapshot, restore_snapshot
+)
+from services.ai_engine import process_action
+from services.dice import roll as do_roll
+
+CONNECTIONS: dict[str, list[WebSocket]] = {}  # {room_code: [ws, ...]}
+
+
+async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
+    room = get_room(room_code)
+    if not room:
+        await ws.close(code=4004, reason="Room not found")
+        return
+
+    # Find player
+    player = next((p for p in room["players"] if p.id == player_id), None)
+    if not player:
+        await ws.close(code=4004, reason="Player not found")
+        return
+
+    player.is_online = True
+    CONNECTIONS.setdefault(room_code, []).append(ws)
+
+    await _broadcast(room_code, {
+        "type": "player_joined",
+        "payload": {
+            "player_id": player.id,
+            "nickname": player.nickname,
+            "online_count": len(CONNECTIONS.get(room_code, [])),
+        },
+    })
+
+    try:
+        while True:
+            raw = await ws.receive_text()
+            data = json.loads(raw)
+            msg_type = data.get("type")
+            payload = data.get("payload", {})
+
+            if msg_type == "player_action":
+                await _handle_action(room, player, payload)
+            elif msg_type == "player_chat":
+                await _handle_chat(room, player, payload)
+            elif msg_type == "dice_roll":
+                await _handle_manual_roll(room, player, payload)
+            elif msg_type == "typing_start":
+                await _broadcast(room_code, {
+                    "type": "typing_indicator",
+                    "payload": {"player_id": player.id, "nickname": player.nickname, "is_typing": True},
+                }, exclude=ws)
+            elif msg_type == "typing_end":
+                await _broadcast(room_code, {
+                    "type": "typing_indicator",
+                    "payload": {"player_id": player.id, "nickname": player.nickname, "is_typing": False},
+                }, exclude=ws)
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        player.is_online = False
+        CONNECTIONS[room_code] = [w for w in CONNECTIONS.get(room_code, []) if w != ws]
+        await _broadcast(room_code, {
+            "type": "player_left",
+            "payload": {
+                "player_id": player.id,
+                "online_count": len(CONNECTIONS.get(room_code, [])),
+            },
+        })
+        if not CONNECTIONS.get(room_code):
+            CONNECTIONS.pop(room_code, None)
+
+
+async def _handle_action(room, player, payload):
+    code = room["code"]
+    content = payload.get("content", "").strip()
+    if not content:
+        return
+
+    # Validate game state
+    if room["status"] != "playing":
+        await _send_error(code, "游戏尚未开始或已结束")
+        return
+
+    # Validate it's this player's turn
+    if player.id != room.get("current_player_id"):
+        await _send_error_single(code, player.id, "还没轮到你行动")
+        return
+
+    # Find character
+    char = next((c for c in room["characters"] if c.player_id == player.id), None)
+    if not char:
+        await _send_error_single(code, player.id, "你还没有角色")
+        return
+
+    # Broadcast typing stop
+    await _broadcast(code, {
+        "type": "typing_indicator",
+        "payload": {"player_id": player.id, "nickname": player.nickname, "is_typing": False},
+    })
+
+    # Save action message and snapshot BEFORE AI call
+    add_message(code, player.id, "action", content)
+    save_snapshot(code)
+
+    # Process through AI (streaming disabled for now - needs more testing)
+    try:
+        ai_result = await process_action(room, content, char.name)
+    except Exception as e:
+        room["messages"] = [m for m in room["messages"] if m.get("content") != content or m.get("type") != "action"]
+        await _send_error_single(code, player.id, "命运之神暂时走神了，请重试")
+        return
+
+    # Handle dice result
+    if ai_result["dice_result"]:
+        dr = ai_result["dice_result"]
+        # Find character by name (from AI) then map to ID
+        dice_char = next((c for c in room["characters"] if c.name == dr["character_name"]), char)
+        add_dice_log(
+            code, dice_char.id, dr["expression"], dr["total"],
+            {"rolls": dr["rolls"], "bonus": dr["bonus"]},
+            dc=dr.get("dc"), success=dr.get("success"),
+            is_critical=bool(dr.get("is_critical")),
+        )
+        add_message(code, None, "dice",
+                    f"{dr['character_name']} {dr['expression']} = {dr['total']}",
+                    metadata=dr)
+        # Include character_id in broadcast so frontend can match
+        dr["character_id"] = dice_char.id
+        await _broadcast(code, {
+            "type": "gm_dice_result",
+            "payload": dr,
+        })
+
+    # Handle state changes
+    for sc in ai_result["state_changes"]:
+        sc_char = next((c for c in room["characters"] if c.name == sc["character_name"]), None)
+        if sc_char:
+            # Apply bar deltas
+            bar_delta = sc.get("bar_delta") or {}
+            for bar_name, delta in bar_delta.items():
+                if bar_name in sc_char.bars:
+                    bar = sc_char.bars[bar_name]
+                    bar["current"] = max(0, min(bar["current"] + delta, bar["max"]))
+            # Add/remove bars
+            if sc.get("add_bar"):
+                ab = sc["add_bar"]
+                sc_char.bars[ab["name"]] = {"current": ab.get("current", 0), "max": ab.get("max", 0)}
+            if sc.get("remove_bar") and sc["remove_bar"] in sc_char.bars:
+                del sc_char.bars[sc["remove_bar"]]
+            # Items
+            if sc.get("add_item"):
+                sc_char.inventory.append(sc["add_item"])
+            if sc.get("remove_item") and sc["remove_item"] in sc_char.inventory:
+                sc_char.inventory.remove(sc["remove_item"])
+            # Statuses
+            if sc.get("add_status") and sc["add_status"] not in sc_char.statuses:
+                sc_char.statuses.append(sc["add_status"])
+            if sc.get("remove_status") and sc["remove_status"] in sc_char.statuses:
+                sc_char.statuses.remove(sc["remove_status"])
+
+        await _broadcast(code, {
+            "type": "state_update",
+            "payload": {
+                "character_id": sc_char.id if sc_char else "",
+                "character_name": sc["character_name"],
+                "bar_delta": sc.get("bar_delta", {}),
+                "add_bar": sc.get("add_bar"),
+                "remove_bar": sc.get("remove_bar"),
+                "add_item": sc.get("add_item"),
+                "remove_item": sc.get("remove_item"),
+                "add_status": sc.get("add_status"),
+                "remove_status": sc.get("remove_status"),
+                "narrative": sc["narrative"],
+            },
+        })
+
+    # Narrative
+    if ai_result["narrative"]:
+        add_message(code, None, "narrative", ai_result["narrative"])
+        # Always send the full narrative so the frontend can display it
+        await _broadcast(code, {
+            "type": "gm_narrative",
+            "payload": {
+                "content": ai_result["narrative"],
+                "turn_number": room["turn_number"],
+                "suggested_actions": ai_result.get("suggested_actions", []),
+            },
+        })
+
+    # Next player
+    room["turn_number"] += 1
+    next_name = ai_result.get("next_player")
+    next_char = None
+    if next_name:
+        next_char = next((c for c in room["characters"] if c.name == next_name), None)
+    if not next_char and room["characters"]:
+        cur_idx = next((i for i, c in enumerate(room["characters"]) if c.id == char.id), 0)
+        next_idx = (cur_idx + 1) % len(room["characters"])
+        next_char = room["characters"][next_idx]
+
+    if next_char:
+        room["current_player_id"] = next_char.player_id
+        await _broadcast(code, {
+            "type": "turn_change",
+            "payload": {
+                "current_player_id": next_char.player_id,
+                "player_name": next_char.name,
+                "turn_number": room["turn_number"],
+            },
+        })
+
+    # Ending suggestion
+    if ai_result.get("ending_suggested"):
+        await _broadcast(code, {
+            "type": "game_ending_prompt",
+            "payload": {"reason": ai_result["ending_suggested"]},
+        })
+
+
+async def _handle_chat(room, player, payload):
+    content = payload.get("content", "").strip()
+    if not content:
+        return
+    msg = add_message(room["code"], player.id, "ooc", content)
+    await _broadcast(room["code"], {
+        "type": "player_chat",
+        "payload": {
+            "player_id": player.id,
+            "nickname": player.nickname,
+            "content": content,
+        },
+    })
+
+
+async def _handle_manual_roll(room, player, payload):
+    expression = payload.get("expression", "d20")
+    result = do_roll(expression)
+    char = next((c for c in room["characters"] if c.player_id == player.id), None)
+    await _broadcast(room["code"], {
+        "type": "gm_dice_result",
+        "payload": {
+            "character_name": char.name if char else player.nickname,
+            "expression": expression,
+            "total": result["total"],
+            "rolls": result["rolls"],
+            "bonus": result["bonus"],
+            "is_critical": None,
+        },
+    })
+
+
+async def _broadcast(room_code: str, message: dict, exclude: WebSocket = None):
+    sockets = CONNECTIONS.get(room_code, [])
+    dead = []
+    for ws in sockets:
+        if ws == exclude:
+            continue
+        try:
+            await ws.send_json(message)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        if ws in sockets:
+            sockets.remove(ws)
+
+
+async def _send_error(room_code: str, message: str):
+    for ws in CONNECTIONS.get(room_code, []):
+        try:
+            await ws.send_json({"type": "error", "payload": {"message": message}})
+        except Exception:
+            pass
+
+
+async def _send_error_single(room_code: str, player_id: str, message: str):
+    """Send error to a specific player only."""
+    for ws in CONNECTIONS.get(room_code, []):
+        try:
+            await ws.send_json({"type": "error", "payload": {"message": message, "player_id": player_id}})
+        except Exception:
+            pass
