@@ -185,30 +185,17 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — filter out marker text
-    _stream_buf = ""
-    _marker_patterns = ["[NEXT:", "[ACTIONS:", "[ENDING:", "[PLOT:", "[NOTE:"]
+    # Process through AI with streaming — strip control markers before sending
+    import re as _re
+    _marker_re = _re.compile(r'\[(?:NEXT|ACTIONS|ENDING|PLOT|NOTE):[^\]]*\]')
 
     async def on_chunk(text: str):
-        nonlocal _stream_buf
-        _stream_buf += text
-        # If buffer starts with [, hold until we know it's not a marker
-        if _stream_buf.startswith("["):
-            # Check if buffer completed a known marker
-            if any(_stream_buf.startswith(p) and "]" in _stream_buf for p in _marker_patterns):
-                # It's a marker — check if there's text after the ]
-                end_idx = _stream_buf.find("]") + 1
-                _stream_buf = _stream_buf[end_idx:]  # Remove marker, keep trailing text
-                if _stream_buf and not _stream_buf.startswith("["):
-                    await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _stream_buf, "turn_number": room["turn_number"]}})
-                    _stream_buf = ""
-            elif len(_stream_buf) > 50:
-                # Probably not a marker — flush
-                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _stream_buf, "turn_number": room["turn_number"]}})
-                _stream_buf = ""
-        else:
-            # No marker in progress — send immediately
-            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": text, "turn_number": room["turn_number"]}})
+        clean = _marker_re.sub('', text)
+        if clean:
+            await _broadcast(code, {
+                "type": "gm_narrative_chunk",
+                "payload": {"content": clean, "turn_number": room["turn_number"]},
+            })
 
     try:
         ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
