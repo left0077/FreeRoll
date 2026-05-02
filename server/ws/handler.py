@@ -482,9 +482,10 @@ async def _handle_roll_confirm(room, player):
         await _send_error_single(code, player.id, "没有待掷骰的请求")
         return
 
+    # Pop FIRST to prevent auto-roll from also firing
+    room.pop("_pending_roll", None)
     ai_result = pending["ai_result"]
     roll_args = pending["roll_args"]
-    room.pop("_pending_roll", None)
 
     # Phase 1: Execute dice immediately → broadcast result with animation
     char = next((c for c in room["characters"] if c.player_id == player.id), None)
