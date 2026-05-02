@@ -415,8 +415,9 @@ def _parse_mixed_response(text: str, result: dict):
 async def _normal_call(messages):
     resp = await client.chat.completions.create(
         model=DEEPSEEK_MODEL, messages=messages,
-        tools=[ROLL_DICE_TOOL, UPDATE_STATE_TOOL],
+        tools=[ROLL_DICE_TOOL],  # Only dice — state changes via [BAR:...] text markers
         temperature=0.8, max_tokens=1024,
+        extra_body={"thinking": {"type": "enabled"}},
     )
     msg = resp.choices[0].message
     tools = []
@@ -428,16 +429,18 @@ async def _normal_call(messages):
     extra = {}
     if hasattr(msg, 'reasoning_content') and msg.reasoning_content:
         extra['reasoning_content'] = msg.reasoning_content
-    return msg.content, tools, extra
+    # Return the full message dict to preserve all fields (reasoning_content etc.)
+    return msg.content, tools, msg.model_dump()
 
 
 async def _stream_call(messages, on_chunk):
     """Stream call: call on_chunk(text) for each token. Returns (full_text, tools, extra_fields)."""
     stream = await client.chat.completions.create(
         model=DEEPSEEK_MODEL, messages=messages,
-        tools=[ROLL_DICE_TOOL, UPDATE_STATE_TOOL],
+        tools=[ROLL_DICE_TOOL],
         temperature=0.8, max_tokens=1024,
         stream=True,
+        extra_body={"thinking": {"type": "enabled"}},
     )
 
     content = ""
