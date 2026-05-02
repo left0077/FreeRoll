@@ -257,28 +257,14 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
             })
             break
 
-    # Build assistant message with all tool calls
-    assistant_msg = {
-        "role": "assistant",
-        "content": narrative,
-        "tool_calls": [
-            {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["args"], ensure_ascii=False)}}
-            for tc in tool_calls_data
-        ],
-    }
-    if extra_fields.get("reasoning_content"):
-        assistant_msg["reasoning_content"] = extra_fields["reasoning_content"]
-    messages.append(assistant_msg)
+    # Use original message dict from first call + tool results
+    messages.append(extra_fields)
     messages.extend(tool_results)
 
-    # Final call to AI
-    try:
-        if on_chunk:
-            narrative2, _, _ = await _stream_call(messages, on_chunk)
-        else:
-            narrative2, _, _ = await _normal_call(messages)
-    except Exception:
-        import traceback; traceback.print_exc()
+    # Normal call
+    if on_chunk:
+        narrative2, _, _ = await _stream_call(messages, on_chunk)
+    else:
         narrative2, _, _ = await _normal_call(messages)
 
     # Parse second call independently — it's the final narrative after the roll
