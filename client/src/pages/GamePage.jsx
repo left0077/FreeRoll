@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../utils/api";
 import DiceRoller from "../components/DiceRoller";
+import ReactMarkdown from "react-markdown";
 
 
 export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
@@ -321,7 +322,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 relative">
         {messages.map((msg, i) => (
-          <MessageBubble key={msg.id || i} msg={msg} players={players} />
+          <MessageBubble key={msg.id || i} msg={msg} players={players} characters={characters} />
         ))}
 
         {/* Typing indicator */}
@@ -588,13 +589,31 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
   );
 }
 
-function MessageBubble({ msg, players }) {
+function MessageBubble({ msg, players, characters }) {
   const player = msg.player_id ? players.find((p) => p.id === msg.player_id) : null;
 
   if (msg.type === "narrative") {
     return (
       <div className="pl-3 border-l-2 border-amber-600/50">
-        <p className="text-gray-200 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+        <div className="text-gray-200 leading-relaxed narrative-content">
+          <ReactMarkdown
+            components={{
+              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+              strong: ({ children }) => <strong className="text-amber-300 font-bold">{children}</strong>,
+              em: ({ children }) => <em className="text-gray-400 italic">{children}</em>,
+              ul: ({ children }) => <ul className="list-disc pl-4 my-1 space-y-0.5">{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal pl-4 my-1 space-y-0.5">{children}</ol>,
+              li: ({ children }) => <li className="text-gray-300">{children}</li>,
+              h3: ({ children }) => <h3 className="text-amber-400 font-bold text-sm mt-3 mb-1">{children}</h3>,
+              h4: ({ children }) => <h4 className="text-gray-300 font-bold text-sm mt-2 mb-1">{children}</h4>,
+              blockquote: ({ children }) => <blockquote className="border-l-2 border-gray-600 pl-3 my-1 text-gray-400 italic">{children}</blockquote>,
+              code: ({ children }) => <code className="bg-gray-800 px-1 py-0.5 rounded text-amber-400 text-xs">{children}</code>,
+              hr: () => <hr className="border-gray-700 my-2" />,
+            }}
+          >
+            {msg.content}
+          </ReactMarkdown>
+        </div>
       </div>
     );
   }
@@ -615,23 +634,24 @@ function MessageBubble({ msg, players }) {
   }
 
   if (msg.type === "system") {
-    return <p className="text-center text-purple-400 text-sm">{msg.content}</p>;
+    return <p className="text-center text-purple-400 text-sm py-1">{msg.content}</p>;
   }
 
   if (msg.type === "action") {
+    const char = characters?.find((c) => c.player_id === msg.player_id);
     return (
-      <div className="flex gap-2">
-        <span className="text-amber-400 font-bold text-sm shrink-0">{player?.nickname || "玩家"}</span>
-        <p className="text-gray-300 text-sm">{msg.content}</p>
+      <div className="flex items-start gap-2 bg-amber-900/10 rounded-lg px-3 py-2 border border-amber-900/30">
+        <span className="text-amber-400 font-bold text-xs shrink-0 mt-0.5">{char?.name || player?.nickname || "冒险者"}</span>
+        <span className="text-gray-200 text-sm">▸ {msg.content}</span>
       </div>
     );
   }
 
   if (msg.type === "ooc") {
     return (
-      <div className="flex gap-2 opacity-70">
-        <span className="text-gray-500 text-sm shrink-0">[{msg.nickname || player?.nickname || "玩家"}]</span>
-        <p className="text-gray-400 text-sm italic">{msg.content}</p>
+      <div className="flex gap-2 pl-2 border-l-2 border-gray-700 opacity-70">
+        <span className="text-gray-500 text-xs shrink-0">[{msg.nickname || player?.nickname || "玩家"}]</span>
+        <p className="text-gray-400 text-xs italic">{msg.content}</p>
       </div>
     );
   }
