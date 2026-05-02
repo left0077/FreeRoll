@@ -115,6 +115,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       case "gm_narrative":
         setMessages((prev) => [...prev, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }]);
         setSuggestedActions(payload.suggested_actions || []);
+        setStreamingText("");  // Clear any leftover streaming text like "等待掷骰..."
         setProcessing(false);
         break;
       case "gm_dice_result":
@@ -180,6 +181,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         break;
       case "roll_request":
         setRollRequest(payload);
+        setStreamingText("");
         setProcessing(false);
         break;
       case "error":
