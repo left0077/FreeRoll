@@ -185,36 +185,30 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — only stream text inside <narrative> tag
+    # Process through AI with streaming — extract <narrative>...</narrative> char by char
     _buf = ""
-    _in_narrative = False
+    _state = "seek"  # seek | stream | done
 
     async def on_chunk(text: str):
-        nonlocal _buf, _in_narrative
-        combined = _buf + text
-
-        if not _in_narrative:
-            if "<narrative>" in combined:
-                _, after = combined.split("<narrative>", 1)
-                _in_narrative = True
-                combined = after
-                _buf = ""
-            else:
-                _buf = combined[-20:]  # Keep last 20 chars to detect <narrative>
-                return
-
-        if "</narrative>" in combined:
-            before = combined.split("</narrative>", 1)[0]
-            if before:
-                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": before, "turn_number": room["turn_number"]}})
-            _in_narrative = False
-            _buf = ""
-        else:
-            if len(combined) > 8:
-                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": combined[:-8], "turn_number": room["turn_number"]}})
-                _buf = combined[-8:]
-            else:
-                _buf = combined
+        nonlocal _buf, _state
+        for ch in text:
+            _buf += ch
+            if _state == "seek":
+                if _buf.endswith("<narrative>"):
+                    _buf = ""
+                    _state = "stream"
+                elif len(_buf) > 20:
+                    _buf = _buf[-20:]
+            elif _state == "stream":
+                if _buf.endswith("</narrative>"):
+                    content = _buf[:-len("</narrative>")]
+                    if content:
+                        await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": content, "turn_number": room["turn_number"]}})
+                    _buf = ""
+                    _state = "done"
+                elif len(_buf) > 14:  # Send all but keep last 13 chars to detect </narrative>
+                    await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf[:-13], "turn_number": room["turn_number"]}})
+                    _buf = _buf[-13:]
 
     try:
         ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
