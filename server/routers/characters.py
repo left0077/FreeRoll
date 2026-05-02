@@ -154,10 +154,16 @@ async def api_claim_preset(req: ClaimRequest):
         raise HTTPException(status_code=400, detail="预设角色不存在")
 
     preset = presets[req.preset_index]
+    preset_name = preset.get("name", "未命名")
+
+    # Prevent duplicate claim
+    if any(c.name == preset_name for c in room["characters"]):
+        raise HTTPException(status_code=400, detail=f"角色「{preset_name}」已被其他玩家认领")
+
     bars = preset.get("bars", {"HP": {"current": 20, "max": 20}})
     character = Character(
         player_id=req.player_id,
-        name=preset.get("name", "未命名"),
+        name=preset_name,
         is_preset=True,
         attributes=preset.get("attributes", {}),
         tags=preset.get("tags", []),

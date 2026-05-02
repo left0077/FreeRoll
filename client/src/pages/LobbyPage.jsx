@@ -237,13 +237,19 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
           <div className="max-w-lg mx-auto mb-6">
             <h3 className="text-amber-400 font-bold mb-3">选择预设角色</h3>
             <div className="grid gap-2">
-              {room.world_module.preset_characters.map((pc, i) => (
-                <button key={i} onClick={() => handleClaimPreset(i)}
-                  className="w-full text-left px-4 py-3 rounded-lg border border-gray-700 bg-gray-800/50 hover:border-amber-600 text-white text-sm">
-                  <div className="font-bold">{pc.name}</div>
-                  <div className="text-xs text-gray-400">{pc.description}</div>
-                </button>
-              ))}
+              {room.world_module.preset_characters.map((pc, i) => {
+                const claimed = room.characters?.some((c) => c.name === pc.name);
+                return (
+                  <button key={i} onClick={() => !claimed && handleClaimPreset(i)} disabled={claimed}
+                    className={`w-full text-left px-4 py-3 rounded-lg border text-sm ${claimed ? "border-gray-800 bg-gray-800/20 text-gray-600 cursor-not-allowed" : "border-gray-700 bg-gray-800/50 hover:border-amber-600 text-white"}`}>
+                    <div className="font-bold flex items-center gap-2">
+                      {pc.name}
+                      {claimed && <span className="text-xs text-gray-500 font-normal">（已被认领）</span>}
+                    </div>
+                    <div className="text-xs text-gray-400">{pc.description}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

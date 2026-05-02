@@ -637,8 +637,11 @@ async def _handle_claim_character(room, player, payload, ws, rid):
         await _reply(ws, {"_error": "预设角色不存在"}, rid); return
 
     preset = presets[idx]
+    preset_name = preset.get("name", "未命名")
+    if any(c.name == preset_name for c in room["characters"]):
+        await _reply(ws, {"_error": f"角色「{preset_name}」已被认领"}, rid); return
     character = Character(
-        player_id=player.id, name=preset.get("name", "未命名"), is_preset=True,
+        player_id=player.id, name=preset_name, is_preset=True,
         attributes=preset.get("attributes", {}), tags=preset.get("tags", []),
         bars=preset.get("bars", {"HP": {"current": 20, "max": 20}}),
         inventory=preset.get("inventory", []), description=preset.get("description", ""),
