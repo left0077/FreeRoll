@@ -218,9 +218,9 @@ async def _do_handle_action(room, player, payload):
                 return
             pending = room.get("_pending_roll")
             if pending and pending["player_id"] == player.id:
-                room.pop("_pending_roll", None)
                 try:
                     ai_result2 = await resume_with_roll(ai_result, roll_args)
+                    room.pop("_pending_roll", None)
                     await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
                     await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": "（自动掷骰）", "turn_number": room["turn_number"]}})
                 except Exception:
@@ -413,7 +413,7 @@ async def _send_error(room_code: str, message: str):
 
 async def _handle_roll_confirm(room, player):
     code = room["code"]
-    pending = room.pop("_pending_roll", None)
+    pending = room.get("_pending_roll")
     if not pending or pending["player_id"] != player.id:
         await _send_error_single(code, player.id, "没有待掷骰的请求")
         return
@@ -423,6 +423,7 @@ async def _handle_roll_confirm(room, player):
 
     try:
         ai_result2 = await resume_with_roll(ai_result, roll_args)
+        room.pop("_pending_roll", None)  # Only clear on success
         await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
     except Exception:
         import traceback

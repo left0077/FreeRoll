@@ -439,16 +439,17 @@ async def _stream_call(messages, on_chunk):
 
 def _execute_dice(args: dict) -> dict:
     from services.dice import roll as do_roll, check_critical
-    dice_result = do_roll(args["dice"])
-    sides = _extract_sides(args["dice"])
+    dice_expr = args.get("dice") or args.get("expression") or "d20"
+    dice_result = do_roll(dice_expr)
+    sides = _extract_sides(dice_expr)
     crit = check_critical(dice_result["rolls"], sides) if sides else None
     dc = args.get("difficulty")
     success = None
     if dc is not None:
         success = dice_result["total"] >= dc
     return {
-        "character_name": args["character_name"],
-        "expression": args["dice"],
+        "character_name": args.get("character_name", "冒险者"),
+        "expression": dice_expr,
         "total": dice_result["total"],
         "rolls": dice_result["rolls"],
         "bonus": dice_result["bonus"],
