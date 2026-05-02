@@ -298,6 +298,10 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
 
 def _parse_mixed_response(text: str, result: dict):
     """Extract <narrative> for players, <controls> for system."""
+    if not text:
+        result["narrative"] = ""
+        return
+
     narrative_text = ""
     control_text = ""
 
@@ -309,14 +313,9 @@ def _parse_mixed_response(text: str, result: dict):
     if m:
         control_text = m.group(1).strip()
 
-    if not narrative_text and not control_text:
-        # Fallback: old format
-        if "<system>" in text:
-            parts = text.split("<system>", 1)
-            narrative_text = parts[0].strip()
-            control_text = parts[1].strip() if len(parts) > 1 else ""
-        else:
-            narrative_text = text.strip()
+    # If AI didn't use XML, use the full text as narrative
+    if not narrative_text:
+        narrative_text = text.strip()
 
     # Parse XML controls
     if control_text:
