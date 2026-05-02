@@ -67,8 +67,7 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。
 2. 数值变化写在 <controls> 块里——绝不在叙事中写"HP:15→12"
 3. 叙事只写故事，不写任何游戏机制
 
-## 输出格式
-<response>
+## 输出格式（必须严格遵守，缺一不可）
 <narrative>纯故事文本，2-4段，用角色名而非你/我。禁止出现骰子、HP、状态标记等游戏术语。</narrative>
 <controls>
 <next>下一个行动的角色名</next>
@@ -78,7 +77,8 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。
 <status character="角色名" action="add">状态名</status>
 <note category="npc">内容</note>
 </controls>
-</response>
+
+注意：叙事必须放在 <narrative> 和 </narrative> 之间，控制系统放在 <controls> 和 </controls> 之间。两个标签都必须有。
 
 ## 回合规则
 - 指定下一个行动的玩家，每个玩家都有参与机会
@@ -311,10 +311,6 @@ def _parse_mixed_response(text: str, result: dict):
     m = re.search(r'<controls>(.+?)</controls>', text, re.DOTALL)
     if m:
         control_text = m.group(1).strip()
-
-    # If AI didn't use XML, use the full text as narrative
-    if not narrative_text:
-        narrative_text = text.strip()
 
     # Parse XML controls
     if control_text:
