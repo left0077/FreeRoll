@@ -222,6 +222,10 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       return;
     }
 
+    // Show player action immediately in chat
+    const actionMsg = { id: Date.now(), type: "action", content, player_id: playerId, turn_number: turnNumber };
+    setMessages((prev) => [...prev, actionMsg]);
+
     if (!send("player_action", { content })) {
       // WebSocket not open — retry a few times with backoff
       let retries = 0;
