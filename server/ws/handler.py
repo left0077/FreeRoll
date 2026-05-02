@@ -133,6 +133,22 @@ async def _handle_action(room, player, payload):
     if not content:
         return
 
+    # Prevent concurrent AI calls (double-click protection)
+    if room.get("_processing"):
+        await _send_error_single(code, player.id, "AI 正在处理上一个行动，请稍候")
+        return
+    room["_processing"] = True
+
+    try:
+        await _do_handle_action(room, player, payload)
+    finally:
+        room.pop("_processing", None)
+
+
+async def _do_handle_action(room, player, payload):
+    code = room["code"]
+    content = payload.get("content", "").strip()
+
     # Validate game state
     if room["status"] != "playing":
         await _send_error(code, "游戏尚未开始或已结束")
@@ -174,7 +190,7 @@ async def _handle_action(room, player, payload):
     # If AI wants a dice roll, pause and ask the player
     if ai_result.get("pending_roll"):
         roll_args = ai_result["pending_roll"]
-        # Store pending state on the player (simple approach: store on room)
+        # Store pending state and start auto-roll timeout
         room["_pending_roll"] = {"player_id": player.id, "ai_result": ai_result, "roll_args": roll_args}
         await _send_to_player(code, player.id, {
             "type": "roll_request",
@@ -184,12 +200,23 @@ async def _handle_action(room, player, payload):
                 "character_name": roll_args.get("character_name", char.name),
             },
         })
-        # Also tell other players to wait
         await _broadcast(code, {
             "type": "gm_narrative_chunk",
             "payload": {"content": f"（等待 {char.name} 掷骰...）", "turn_number": room["turn_number"]},
         }, exclude=None)
-        return  # Stop here, wait for roll_confirm
+
+        # Auto-roll timeout: if player doesn't respond in 30s, roll automatically
+        import asyncio
+        async def auto_roll():
+            await asyncio.sleep(30)
+            pending = room.get("_pending_roll")
+            if pending and pending["player_id"] == player.id:
+                room.pop("_pending_roll", None)
+                ai_result2 = await resume_with_roll(ai_result, roll_args)
+                await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
+                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": "（自动掷骰）", "turn_number": room["turn_number"]}})
+        asyncio.create_task(auto_roll())
+        return  # Stop here, wait for roll_confirm or auto-roll
 
     # Handle dice result (from deferred roll or direct)
     if ai_result["dice_result"]:
@@ -384,11 +411,13 @@ async def _handle_roll_confirm(room, player):
     ai_result = pending["ai_result"]
     roll_args = pending["roll_args"]
 
-    # Execute the roll and resume AI
-    ai_result2 = await resume_with_roll(ai_result, roll_args)
-
-    # Now process the final result
-    await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
+    try:
+        ai_result2 = await resume_with_roll(ai_result, roll_args)
+        await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        await _send_error_single(code, player.id, "掷骰判定失败，请重试")
 
 
 async def _process_ai_result(room, code, ai_result, player, prev_state_changes=None):

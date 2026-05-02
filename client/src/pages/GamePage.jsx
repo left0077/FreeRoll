@@ -225,9 +225,11 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
     setInput("");
     setProcessing(true);
 
-    // OOC chat
+    // OOC chat — add locally + broadcast
     if (content.startsWith("(OOC)") || content.startsWith("(ooc)")) {
-      if (!send("player_chat", { content: content.replace(/^\(OOC\)\s*/i, "") })) {
+      const oocContent = content.replace(/^\(OOC\)\s*/i, "");
+      setMessages((prev) => [...prev, { id: Date.now(), type: "ooc", content: oocContent, player_id: playerId, nickname: players.find((p) => p.id === playerId)?.nickname }]);
+      if (!send("player_chat", { content: oocContent })) {
         setProcessing(false);
       }
       return;
@@ -238,11 +240,12 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
     setMessages((prev) => [...prev, actionMsg]);
 
     if (!send("player_action", { content })) {
-      // WebSocket not open — retry a few times with backoff
       let retries = 0;
       const trySend = () => {
         if (send("player_action", { content })) {
           setProcessing(true);
+          // Safety timeout: if no response in 45s, reset processing
+          setTimeout(() => setProcessing((p) => { if (p) { setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: "❌ 响应超时，请重试" }]); } return false; }), 45000);
           return;
         }
         retries++;
@@ -253,6 +256,8 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         }
       };
       trySend();
+    } else {
+      setTimeout(() => setProcessing((p) => { if (p) { setMessages((prev) => [...prev, { id: Date.now(), type: "system", content: "❌ 响应超时，请重试" }]); } return false; }), 45000);
     }
   };
 
