@@ -185,25 +185,29 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — stop at [SYSTEM] separator
+    # Process through AI with streaming — buffer last chars to detect [SYSTEM]
     _buf = ""
 
     async def on_chunk(text: str):
         nonlocal _buf
-        _buf += text
-        if "[SYSTEM]" in _buf:
-            before = _buf.split("[SYSTEM]", 1)[0]
+        combined = _buf + text
+        if "[SYSTEM]" in combined:
+            before = combined.split("[SYSTEM]", 1)[0]
             if before:
                 await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": before, "turn_number": room["turn_number"]}})
-            _buf = "[SYSTEM]"  # Sentinel — discard all further chunks
-        elif len(_buf) > 500:
-            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
-            _buf = ""
+            _buf = "[SYSTEM]"  # Sentinel
+        else:
+            # Send all but keep last 8 chars to catch split [SYSTEM]
+            if len(combined) > 8:
+                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": combined[:-8], "turn_number": room["turn_number"]}})
+                _buf = combined[-8:]
+            else:
+                _buf = combined
 
     try:
         ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
-        # Flush any remaining buffered text
-        if _buf and not _buf.startswith("["):
+        # Flush any remaining buffered text (that isn't the sentinel or a partial marker)
+        if _buf and _buf != "[SYSTEM]" and not _buf.startswith("[SYS"):
             await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
     except Exception as e:
         room["messages"] = [m for m in room["messages"] if m.get("content") != content or m.get("type") != "action"]
