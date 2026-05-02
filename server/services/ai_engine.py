@@ -458,7 +458,7 @@ def _execute_dice(args: dict) -> dict:
         "dc": dc,
         "success": success,
         "is_critical": crit,
-        "reason": args["reason"],
+        "reason": args.get("reason", args.get("dice", dice_expr)),
     }
 
 
