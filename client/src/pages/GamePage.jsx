@@ -3,6 +3,13 @@ import { api } from "../utils/api";
 import DiceRoller from "../components/DiceRoller";
 import ReactMarkdown from "react-markdown";
 
+const CHAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#e11d48", "#6366f1", "#14b8a6"];
+const getCharColor = (name) => {
+  if (!name) return CHAR_COLORS[0];
+  const idx = [...name].reduce((h, c) => h + c.charCodeAt(0), 0) % CHAR_COLORS.length;
+  return CHAR_COLORS[idx];
+};
+
 
 export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
   const [messages, setMessages] = useState([]);
@@ -328,7 +335,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
             const owner = players.find((p) => p.id === c.player_id);
             return (
               <div key={c.id} className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-all ${isCurrent ? "bg-amber-900/40 border border-amber-600/50 ring-1 ring-amber-500/30" : "bg-gray-800/70 border border-transparent"}`}>
-                <span className={`font-bold ${isCurrent ? "text-amber-300" : "text-gray-300"}`}>
+                <span className="font-bold" style={{color: getCharColor(c.name)}}>
                   {c.name}
                 </span>
                 {c.bars && Object.entries(c.bars).map(([bn, b]) => {
@@ -675,33 +682,6 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
 
 function MessageBubble({ msg, players, characters }) {
   const player = msg.player_id ? players.find((p) => p.id === msg.player_id) : null;
-
-  // Color helper
-  const CHAR_COLORS = ["#f59e0b", "#3b82f6", "#10b981", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#e11d48", "#6366f1", "#14b8a6"];
-  const getCharColor = (name) => {
-    if (!name) return CHAR_COLORS[0];
-    const idx = [...name].reduce((h, c) => h + c.charCodeAt(0), 0) % CHAR_COLORS.length;
-    return CHAR_COLORS[idx];
-  };
-
-  // Render text with character names highlighted
-  const renderWithNames = (text, baseClass = "text-gray-200") => {
-    if (!text || !characters?.length) return <span className={baseClass}>{text}</span>;
-    const names = characters.map(c => c.name).filter(Boolean).sort((a, b) => b.length - a.length);
-    if (!names.length) return <span className={baseClass}>{text}</span>;
-    const pattern = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    const parts = text.split(new RegExp(`(${pattern})`, 'g'));
-    return (
-      <span className={baseClass}>
-        {parts.map((part, i) => {
-          const isName = names.includes(part);
-          return isName
-            ? <span key={i} style={{color: getCharColor(part), fontWeight: 'bold'}}>{part}</span>
-            : <span key={i}>{part}</span>;
-        })}
-      </span>
-    );
-  };
 
   if (msg.type === "narrative") {
     return (
