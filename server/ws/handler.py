@@ -565,14 +565,15 @@ async def _process_ai_result(room, code, ai_result, player, prev_state_changes=N
             "narrative": sc["narrative"],
         }})
 
-    # Narrative
-    if ai_result.get("narrative"):
-        add_message(code, None, "narrative", ai_result["narrative"])
-        await _broadcast(code, {"type": "gm_narrative", "payload": {
-            "content": ai_result["narrative"],
-            "turn_number": room["turn_number"],
-            "suggested_actions": ai_result.get("suggested_actions", []),
-        }})
+    # Narrative — always send, even if empty, to clear frontend processing state
+    narrative_text = ai_result.get("narrative", "")
+    if narrative_text:
+        add_message(code, None, "narrative", narrative_text)
+    await _broadcast(code, {"type": "gm_narrative", "payload": {
+        "content": narrative_text,
+        "turn_number": room["turn_number"],
+        "suggested_actions": ai_result.get("suggested_actions", []),
+    }})
 
     # Next player
     room["turn_number"] += 1
