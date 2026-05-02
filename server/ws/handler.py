@@ -185,23 +185,40 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — strip control markers before sending
+    # Process through AI with streaming — strip control markers
     import re as _re
-    _marker_re = _re.compile(r'\[(?:NEXT|ACTIONS|ENDING|PLOT|NOTE):[^\]]{0,80}\]')
+    _buf = ""
+    _MARKER_STARTS = ["[NEXT:", "[ACTIONS:", "[ENDING:", "[PLOT:", "[NOTE:"]
 
     async def on_chunk(text: str):
-        clean = _marker_re.sub('', text)
-        # Also strip partial marker starts like "[NEX" or "[ACT" at end of chunk
-        clean = _re.sub(r'\[(?:NEX?|ACT?|END?|PLO?|NOT?)$', '', clean)
-        clean = _re.sub(r'^[^\[]*\](?!\w)', '', clean)  # Strip orphaned closing brackets
-        if clean:
-            await _broadcast(code, {
-                "type": "gm_narrative_chunk",
-                "payload": {"content": clean, "turn_number": room["turn_number"]},
-            })
+        nonlocal _buf
+        _buf += text
+        # While buffer starts with a known marker, strip it
+        while True:
+            stripped = False
+            for prefix in _MARKER_STARTS:
+                if _buf.startswith(prefix):
+                    end = _buf.find("]", len(prefix))
+                    if end >= 0:
+                        _buf = _buf[end + 1:]  # Remove complete marker
+                        stripped = True
+                        break
+            if not stripped:
+                break
+        # If buffer doesn't start with a potential marker, send it
+        if _buf and not _buf.startswith("["):
+            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
+            _buf = ""
+        # If buffer starts with [ but doesn't match known markers, after 100 chars flush it
+        elif len(_buf) > 100:
+            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
+            _buf = ""
 
     try:
         ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
+        # Flush any remaining buffered text
+        if _buf and not _buf.startswith("["):
+            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
     except Exception as e:
         room["messages"] = [m for m in room["messages"] if m.get("content") != content or m.get("type") != "action"]
         await _send_error_single(code, player.id, "命运之神暂时走神了，请重试")
