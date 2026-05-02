@@ -78,41 +78,39 @@ SYSTEM_PROMPT = """你是一个文字跑团的主持人（GM）。你的职责�
 - 临时数值条用完后记得 remove_bar 清理
 - 普通对话、观察、移动等无风险行动不需要掷骰
 
+## 输出格式（严格遵守）
+所有回复分为两个部分，用 `---` 分隔：
+
+叙事部分（玩家可见）
+---
+控制标记（玩家不可见）
+
+控制标记格式：
+- [NEXT:角色名] — 指定下一个行动的玩家
+- [ACTIONS:建议1|建议2|建议3] — 行动建议（必须输出！）
+- [PLOT:阶段编号:阶段名称] — 推进剧情主线
+- [NOTE:分类:内容] — 发现记录（npc/location/clue/event）
+- [ENDING:理由] — 建议结束游戏
+
+例如：
+走廊深处传来低沉的嘶吼，火把的光芒在石壁上投下不安的阴影。金鬃王握紧了长剑。
+---
+[NEXT:金鬃王]
+[ACTIONS:举火把谨慎向前探查声音来源|退后到岔路口选择另一条路|大声喊话试探黑暗中是什么生物]
+[NOTE:location:地下城第二层，走廊尽头有不明生物]
+
+注意：`---` 前面的叙事部分是玩家看到的文字。`---` 后面的标记是系统指令，玩家不可见。
+
 ## 回合管理
-- 每次叙事末尾，根据故事走向指定下一个应该行动的玩家
-- 格式：[NEXT:角色名]
+- 根据故事走向指定下一个行动的玩家
 - 让每个玩家都有参与机会，不要让一个人连续行动超过 2 回合
 
-## 行动建议（最重要规则，每次叙事必须输出）
-- 每次叙事末尾，你必须输出 [ACTIONS:...] 标记，为下一个行动的玩家提供 3 个贴合当前场景的具体建议
-- 如果不输出这个标记，玩家将看不到任何行动提示，游戏无法继续！
-- 格式：[ACTIONS:具体行动1|具体行动2|具体行动3]
-- 行动建议必须基于你刚描述的叙事内容中的具体细节
-  - 你刚描述了血迹→建议中应包含"检查血迹"
-  - 你刚描述了NPC出现→建议中应包含"与NPC对话"
-  - 你刚描述了奇怪的声音→建议中应包含"调查声音来源"
-- 错误示范（太泛）："我检查房间"、"我搜索物品"、"我观察四周"
-- 正确示范："蹲下用手指触碰地上的暗红色液体确认是否是血迹"、"朝声音传来的东北方向走廊轻声喊话试探"
-
-## 世界书记录
-- 当玩家发现重要的NPC、地点、物品或线索时，在叙事末尾用标记记录下来
-- 格式：[NOTE:分类:内容]。分类：npc(人物)、location(地点)、clue(线索)、event(事件)
-- 例如：[NOTE:npc:神秘的精灵商人艾隆，在废弃矿坑入口摆摊][NOTE:clue:矿坑深处传来有规律的敲击声]
-- 只记录玩家新发现的事物，不要重复已有信息
-
-## 剧情主线
-- 游戏有主线剧情（storyline），分多个阶段。当玩家完成一个阶段时，推进主线
-- 如果玩家发现了新的重要情报或剧情转折，可以更新后续阶段的内容
-- 推进主线格式：[PLOT:阶段编号:阶段名称]。例如 [PLOT:1:发现暗门入口] 表示第1阶段完成，名称更新为"发现暗门入口"
-- 阶段编号从0开始。先完成阶段0才能推进到阶段1
-- 如果剧情发生重大转折，可以修改后续阶段名称：[PLOT:2:??] 表示将第2阶段重置为未知
-
 ## 游戏结束
-- 当剧情自然收尾（任务完成、谜题解开、Boss击败等），输出 [ENDING:简短理由]
+- 当剧情自然收尾时输出 [ENDING:简短理由]
 - 不要在剧情中途随意建议结束
 
 ## 玩家间对话
-- 玩家可以用 (OOC) 标记进行场外对话，这些消息不需要你回应
+- 玩家用 (OOC) 标记进行场外对话，你不需要回应
 """
 
 
@@ -240,34 +238,9 @@ async def process_action(room: dict, player_input: str, character_name: str,
                 narrative2, _, _ = await _normal_call(messages)
             narrative = (narrative or "") + (narrative2 or "")
 
-    # Parse markers
-    next_match = re.search(r'\[NEXT:(.+?)\]', narrative or "")
-    if next_match:
-        result["next_player"] = next_match.group(1).strip()
-        narrative = re.sub(r'\[NEXT:.+?\]', '', narrative or "").strip()
-
-    ending_match = re.search(r'\[ENDING:(.+?)\]', narrative or "")
-    if ending_match:
-        result["ending_suggested"] = ending_match.group(1).strip()
-        narrative = re.sub(r'\[ENDING:.+?\]', '', narrative or "").strip()
-
-    # Parse action suggestions
-    actions_match = re.search(r'\[ACTIONS:(.+?)\]', narrative or "")
-    if actions_match:
-        result["suggested_actions"] = [a.strip() for a in actions_match.group(1).split("|") if a.strip()]
-        narrative = re.sub(r'\[ACTIONS:.+?\]', '', narrative or "").strip()
-
-    # Parse plot progression
-    plot_match = re.search(r'\[PLOT:(\d+):(.+?)\]', narrative or "")
-    if plot_match:
-        result["plot_update"] = {"stage": int(plot_match.group(1)), "name": plot_match.group(2).strip()}
-        narrative = re.sub(r'\[PLOT:\d+:.+?\]', '', narrative or "").strip()
-
-    # Parse world book notes
-    notes = re.findall(r'\[NOTE:(\w+):(.+?)\]', narrative or "")
-    if notes:
-        result["world_notes"] = [{"category": c, "content": t.strip()} for c, t in notes]
-        narrative = re.sub(r'\[NOTE:\w+:.+?\]', '', narrative or "").strip()
+    # Split on --- : before is narrative, after is control markers
+    _parse_mixed_response(narrative or "", result)
+    narrative = result["narrative"]
 
     # Store state for potential resume
     result["_messages"] = messages
@@ -343,33 +316,54 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
         "suggested_actions": [],
     }
 
-    next_match = re.search(r'\[NEXT:(.+?)\]', full_narrative)
-    if next_match:
-        result["next_player"] = next_match.group(1).strip()
-        full_narrative = re.sub(r'\[NEXT:.+?\]', '', full_narrative).strip()
-
-    ending_match = re.search(r'\[ENDING:(.+?)\]', full_narrative)
-    if ending_match:
-        result["ending_suggested"] = ending_match.group(1).strip()
-        full_narrative = re.sub(r'\[ENDING:.+?\]', '', full_narrative).strip()
-
-    actions_match = re.search(r'\[ACTIONS:(.+?)\]', full_narrative)
-    if actions_match:
-        result["suggested_actions"] = [a.strip() for a in actions_match.group(1).split("|") if a.strip()]
-        full_narrative = re.sub(r'\[ACTIONS:.+?\]', '', full_narrative).strip()
-
-    plot_match = re.search(r'\[PLOT:(\d+):(.+?)\]', full_narrative)
-    if plot_match:
-        result["plot_update"] = {"stage": int(plot_match.group(1)), "name": plot_match.group(2).strip()}
-        full_narrative = re.sub(r'\[PLOT:\d+:.+?\]', '', full_narrative).strip()
-
-    notes = re.findall(r'\[NOTE:(\w+):(.+?)\]', full_narrative)
-    if notes:
-        result["world_notes"] = [{"category": c, "content": t.strip()} for c, t in notes]
-        full_narrative = re.sub(r'\[NOTE:\w+:.+?\]', '', full_narrative).strip()
-
-    result["narrative"] = full_narrative.strip()
+    _parse_mixed_response(full_narrative, result)
     return result
+
+
+def _parse_mixed_response(text: str, result: dict):
+    """Split on --- : narrative before, control markers after."""
+    if "---" in text:
+        parts = text.split("---", 1)
+        narrative_text = parts[0].strip()
+        control_text = parts[1].strip() if len(parts) > 1 else ""
+    else:
+        narrative_text = text.strip()
+        control_text = text  # Fallback: parse markers from full text, strip later
+
+    # Parse controls from control_text first, fallback to narrative
+    for source in [control_text, narrative_text]:
+        if result.get("next_player") and result.get("suggested_actions"):
+            break
+
+        m = re.search(r'\[NEXT:(.+?)\]', source)
+        if m and not result.get("next_player"):
+            result["next_player"] = m.group(1).strip()
+
+        m = re.search(r'\[ENDING:(.+?)\]', source)
+        if m:
+            result["ending_suggested"] = m.group(1).strip()
+
+        m = re.search(r'\[ACTIONS:(.+?)\]', source)
+        if m and not result.get("suggested_actions"):
+            result["suggested_actions"] = [a.strip() for a in m.group(1).split("|") if a.strip()]
+
+        m = re.search(r'\[PLOT:(\d+):(.+?)\]', source)
+        if m and not result.get("plot_update"):
+            result["plot_update"] = {"stage": int(m.group(1)), "name": m.group(2).strip()}
+
+        notes = re.findall(r'\[NOTE:(\w+):(.+?)\]', source)
+        if notes:
+            existing = result.get("world_notes", [])
+            for c, t in notes:
+                if not any(d.get("content") == t.strip() for d in existing):
+                    existing.append({"category": c, "content": t.strip()})
+            result["world_notes"] = existing
+
+    # Clean narrative: strip any remaining inline markers
+    if not ("---" in text):
+        narrative_text = re.sub(r'\[(?:NEXT|ACTIONS|ENDING|PLOT|NOTE):[^\]]*\]', '', narrative_text).strip()
+
+    result["narrative"] = narrative_text
 
 
 async def _normal_call(messages):

@@ -185,42 +185,20 @@ async def _do_handle_action(room, player, payload):
     })
     save_snapshot(code)
 
-    # Process through AI with streaming — strip control markers
-    import re as _re
-    _buf = ""
-    _MARKER_STARTS = ["[NEXT:", "[ACTIONS:", "[ENDING:", "[PLOT:", "[NOTE:"]
+    # Process through AI with streaming — stop at --- separator
+    _sentinel_hit = False
 
     async def on_chunk(text: str):
-        nonlocal _buf
-        _buf += text
-        # Find first marker start position in buffer
-        while True:
-            first_marker = -1
-            first_prefix = ""
-            for prefix in _MARKER_STARTS:
-                pos = _buf.find(prefix)
-                if pos >= 0 and (first_marker < 0 or pos < first_marker):
-                    first_marker = pos
-                    first_prefix = prefix
-            if first_marker < 0:
-                break  # No marker in buffer
-            # Send text before the marker
-            if first_marker > 0:
-                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf[:first_marker], "turn_number": room["turn_number"]}})
-                _buf = _buf[first_marker:]
-            # Try to strip complete marker
-            end = _buf.find("]", len(first_prefix))
-            if end >= 0:
-                _buf = _buf[end + 1:]  # Remove complete marker
-            else:
-                break  # Marker incomplete, wait for more
-        # Send remaining non-marker text
-        if _buf and not _buf.startswith("["):
-            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
-            _buf = ""
-        elif len(_buf) > 100:
-            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": _buf, "turn_number": room["turn_number"]}})
-            _buf = ""
+        nonlocal _sentinel_hit
+        if _sentinel_hit:
+            return  # Already past ---, discard everything
+        if "---" in text:
+            before = text.split("---", 1)[0]
+            if before:
+                await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": before, "turn_number": room["turn_number"]}})
+            _sentinel_hit = True
+        else:
+            await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": text, "turn_number": room["turn_number"]}})
 
     try:
         ai_result = await process_action(room, content, char.name, on_chunk=on_chunk)
