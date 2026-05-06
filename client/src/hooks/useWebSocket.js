@@ -122,7 +122,7 @@ export function useWebSocket(roomCode, playerId) {
       pendingRef.current[rid] = { resolve, reject, timer };
       wsRef.current.send(JSON.stringify({ type, payload, _rid: rid }));
     });
-  }, []);
+  }, [roomCode, playerId]);
 
   useEffect(() => {
     return () => disconnect();

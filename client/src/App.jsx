@@ -17,11 +17,15 @@ export default function App() {
 
   // api.js routes through WebSocket when available
   useEffect(() => { setWsTransport(request); }, [request]);
-
+  // Cleanup must not nullify if we're just changing rooms
   useEffect(() => {
     if (roomCode && playerId) connect();
-    return () => { setWsTransport(null); };
   }, [roomCode, playerId, connect]);
+
+  // Nullify only when leaving entirely
+  useEffect(() => {
+    return () => { setWsTransport(null); };
+  }, []);
 
   const enterLobby = useCallback((code, pid, owner) => {
     setRoomCode(code);
