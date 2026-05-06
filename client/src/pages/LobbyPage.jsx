@@ -184,7 +184,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
         {error && <p className="text-red-400 text-sm text-center mb-4">{error}</p>}
 
         {/* === World generation === */}
-        {isOwner && !worldDone ? (
+        {isOwner && !worldDone && !generatingWorld ? (
           <div className="max-w-lg mx-auto space-y-4">
             <h3 className="text-lg font-bold text-amber-400">生成世界模组</h3>
             <p className="text-sm text-gray-400">选择一种方式创建游戏世界观</p>
@@ -244,7 +244,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               {generatingWorld ? "AI 编织世界中..." : "生成世界"}
           </button>
           </div>
-        ) : !worldDone ? (
+        ) : !worldDone && !generatingWorld ? (
           <div className="text-center text-gray-500 mt-20">
             <p className="text-2xl mb-2">等待房主生成世界模组...</p>
             <p className="text-sm">生成后即可创建或选择你的角色</p>
