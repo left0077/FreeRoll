@@ -94,13 +94,6 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
           <p className="text-amber-400 text-sm bg-amber-900/20 px-4 py-2 rounded-lg">你被邀请加入房间 {urlRoom.toUpperCase()}，输入昵称加入</p>
         )}
 
-        {lastGame && nickname && (
-          <button onClick={handleResume} disabled={loading}
-            className="w-full py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold disabled:opacity-50">
-            {loading ? "重新加入中..." : `继续游戏 → 房间 ${lastGame.roomCode}`}
-          </button>
-        )}
-
         <input
           className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none"
           placeholder="你的昵称"
@@ -137,6 +130,13 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
         >
           {loading ? "加入中..." : "加入房间"}
         </button>
+
+        {lastGame && nickname && (
+          <button onClick={handleResume} disabled={loading}
+            className="w-full py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold disabled:opacity-50">
+            {loading ? "重新加入中..." : `继续游戏 → 房间 ${lastGame.roomCode}`}
+          </button>
+        )}
 
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
       </div>
