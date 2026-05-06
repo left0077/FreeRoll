@@ -48,7 +48,10 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
     on("world_updated", () => { loadRoom(); });
     on("character_updated", loadRoom);
     on("world_gen_chunk", (p) => {
-      setWorldGenText((prev) => prev + p.content);
+      // 30ms delay between chunks for visible typing effect via DOM ref
+      setTimeout(() => {
+        if (worldGenRef.current) worldGenRef.current.textContent += p.content;
+      }, 30);
     });
     on("world_gen_done", () => {});
   }, [on]);
@@ -285,7 +288,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
         )}
 
         {/* === Preset character selection === */}
-        {worldDone && room.world_module?.preset_characters?.length > 0 && !myChar && (
+        {worldDone && !generatingWorld && room.world_module?.preset_characters?.length > 0 && !myChar && (
           <div className="max-w-lg mx-auto mb-6">
             <h3 className="text-amber-400 font-bold mb-3">选择预设角色</h3>
             <div className="grid gap-2">
@@ -307,7 +310,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
         )}
 
         {/* === Character creation === */}
-        {worldDone && !myChar && (
+        {worldDone && !generatingWorld && !myChar && (
           <div className="max-w-md mx-auto space-y-4">
             <h3 className="text-lg font-bold text-amber-400">
               {room.world_module?.preset_characters?.length > 0 ? "或者，自定义角色" : "创建你的角色"}
