@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI, WebSocket, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from routers import rooms, worlds, characters
 from ws.handler import handle_ws
 from config import HOST, PORT
@@ -31,6 +33,12 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str = Que
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+# Serve frontend static files
+dist_path = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(dist_path):
+    app.mount("/", StaticFiles(directory=dist_path, html=True), name="static")
 
 
 if __name__ == "__main__":

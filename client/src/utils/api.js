@@ -1,7 +1,7 @@
 const STORAGE_KEY = "freeroll_backend_url";
 
 export function getBackendUrl() {
-  return localStorage.getItem(STORAGE_KEY) || "https://ai.r99053000.nyat.app:59745";
+  return localStorage.getItem(STORAGE_KEY) || window.location.origin;
 }
 
 export function setBackendUrl(url) {
