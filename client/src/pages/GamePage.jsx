@@ -112,8 +112,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         setStreamingText((prev) => prev + payload.content);
         break;
       case "gm_narrative_chunk_done":
-        setStreamingText("");
-        break;
+        // streamingText stays until gm_narrative finalizes it
         break;
       case "gm_narrative_done":
         setStreamingText((prev) => {
