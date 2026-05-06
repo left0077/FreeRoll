@@ -53,6 +53,7 @@ export async function api(path, options = {}) {
   const method = options.method || "GET";
   const body = options.body ? JSON.parse(options.body) : {};
 
+  console.log('[API] _wsRequest exists:', !!_wsRequest, 'msgType:', findMessageType(method, path));
   // Try WebSocket first
   if (_wsRequest) {
     const msgType = findMessageType(method, path);
