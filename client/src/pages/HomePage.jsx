@@ -89,8 +89,8 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
       <h1 className="text-4xl font-bold text-amber-400 mb-2">FreeRoll</h1>
       <p className="text-gray-400 mb-8">AI 主持的文字跑团冒险</p>
 
-      {invited && (
-        <p className="text-amber-400 text-sm bg-amber-900/20 px-4 py-2 rounded-lg">{invited}，输入昵称加入</p>
+      {urlRoom && (
+        <p className="text-amber-400 text-sm bg-amber-900/20 px-4 py-2 rounded-lg">你被邀请加入房间 {urlRoom.toUpperCase()}，输入昵称加入</p>
       )}
 
       {lastGame && nickname && (
