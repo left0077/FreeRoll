@@ -315,7 +315,6 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
     }
     _parse_mixed_response(_repair_xml(narrative2 or ""), result)
     return result
-    return result
 
 
 def _repair_xml(text: str) -> str:
