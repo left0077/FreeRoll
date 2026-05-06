@@ -200,27 +200,29 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               <input className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-amber-500 focus:outline-none"
                 placeholder="描述你想要的世界，如：赛博朋克修仙门派" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             )}
-            {/* Style options */}
-            <div className="grid grid-cols-2 gap-2">
-              <select className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm"
-                value={style} onChange={(e) => setStyle(e.target.value)}>
-                <option value="">文风（可选）</option>
-                <option value="轻松搞笑">轻松搞笑</option>
-                <option value="黑暗严肃">黑暗严肃</option>
-                <option value="史诗奇幻">史诗奇幻</option>
-                <option value="日系轻小说">日系轻小说</option>
-                <option value="硬核写实">硬核写实</option>
-                <option value="文艺唯美">文艺唯美</option>
-              </select>
-              <select className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm"
-                value={tone} onChange={(e) => setTone(e.target.value)}>
-                <option value="">剧情基调（可选）</option>
-                <option value="欢乐向">欢乐向</option>
-                <option value="严肃向">严肃向</option>
-                <option value="恐怖向">恐怖向</option>
-                <option value="治愈向">治愈向</option>
-                <option value="热血向">热血向</option>
-              </select>
+            {/* Style: button selects */}
+            <div>
+              <p className="text-xs text-gray-500 mb-1.5">文风（可选）</p>
+              <div className="flex flex-wrap gap-1.5">
+                {["", "圣经体", "文言文", "申论风", "轻小说", "硬核写实"].map((s) => (
+                  <button key={s} type="button" onClick={() => setStyle(style === s ? "" : s)}
+                    className={`px-3 py-1 rounded-full text-xs ${style === s ? "bg-amber-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                    {s || "默认"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Plot tightness: button selects */}
+            <div>
+              <p className="text-xs text-gray-500 mb-1.5">主线紧密度</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[{v:"strict",l:"紧扣主线"},{v:"guided",l:"适度引导"},{v:"free",l:"自由发挥"}].map((o) => (
+                  <button key={o.v} type="button" onClick={() => setTone(tone === o.v ? "" : o.v)}
+                    className={`px-3 py-1 rounded-full text-xs ${tone === o.v ? "bg-amber-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
+                    {o.l}
+                  </button>
+                ))}
+              </div>
             </div>
             <input className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:border-amber-500 focus:outline-none"
               placeholder="额外创作要求（可选），如：禁止出现魔法少女" value={customStyle} onChange={(e) => setCustomStyle(e.target.value)} />

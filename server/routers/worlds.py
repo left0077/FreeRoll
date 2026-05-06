@@ -216,8 +216,10 @@ async def _generate_initial_scene(template: dict) -> str:
 
 async def _generate_from_search(query: str) -> dict:
     style_note = ""
-    if req.style: style_note += f" 文风：{req.style}。"
-    if req.tone: style_note += f" 基调：{req.tone}。"
+    if req.style: style_note += f" 文风：请使用{req.style}风格写作。"
+    if req.tone:
+        tightness = {"strict": "请严格围绕主线展开剧情，每次叙事都应推进主线进度。", "free": "请放任玩家自由探索世界，不必急于推进主线，让玩家主导节奏。"}.get(req.tone, "请适度围绕主线，同时允许玩家自由发挥。")
+        style_note += f" 主线紧密度：{tightness}"
     if req.custom_style: style_note += f" 额外要求：{req.custom_style}。"
     if style_note: style_note = f"\n创作要求：{style_note}\n"
 
