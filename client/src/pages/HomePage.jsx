@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api, setBackendUrl, getBackendUrl } from "../utils/api";
 import { useCookie } from "../hooks/useCookie";
 
@@ -14,8 +14,15 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
   const [autoJoining, setAutoJoining] = useState(!!urlRoom);
   const [error, setError] = useState("");
 
-  // Show invitation message if coming from a share link
-  const invited = urlRoom ? `你被邀请加入房间 ${urlRoom.toUpperCase()}` : null;
+  // Auto-join: if room in URL and nickname already saved (not freshly typed), join immediately
+  const nicknameLoaded = useRef(false);
+  useEffect(() => {
+    if (urlRoom && nickname.trim() && !loading && !nicknameLoaded.current) {
+      nicknameLoaded.current = true;
+      // Small delay so user sees the page before redirect
+      setTimeout(() => handleJoin(), 300);
+    }
+  }, [urlRoom, nickname]);
 
   const handleCreate = async () => {
     if (!nickname.trim()) return setError("请输入你的昵称");
