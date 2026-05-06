@@ -39,10 +39,6 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
     try {
       const data = await api(`/api/rooms/${roomCode}`);
       setRoom(data);
-      // Late join: go to game if room is playing AND player has a character
-      if (data.status === "playing" && data.characters?.find((c) => c.player_id === playerId)) {
-        onGameStart();
-      }
     } catch (e) { setError(e.message); }
   };
 
@@ -316,6 +312,12 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               <h3 className="text-lg font-bold text-amber-400">你的角色</h3>
               <button onClick={() => handleDeleteChar(myChar.id)} className="text-xs text-gray-500 hover:text-red-400">删除重建</button>
             </div>
+            {room?.status === "playing" && (
+              <button onClick={onGameStart}
+                className="w-full py-3 rounded-lg bg-green-600 hover:bg-green-500 text-white font-bold text-base">
+                进入游戏
+              </button>
+            )}
             <div className="p-4 rounded-lg bg-gray-800 border border-gray-700 space-y-3">
               <div className="flex justify-between items-start">
                 <div>
