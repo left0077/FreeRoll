@@ -18,6 +18,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   const [worldRef, setWorldRef] = useState("isekai_adventure");
   const [searchQuery, setSearchQuery] = useState("");
   const [generatingWorld, setGeneratingWorld] = useState(false);
+  const [worldGenText, setWorldGenText] = useState("");
   const [style, setStyle] = useState("");
   const [tone, setTone] = useState("");
   const [customStyle, setCustomStyle] = useState("");
@@ -43,8 +44,10 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   };
 
   useEffect(() => {
-    on("world_updated", loadRoom);
+    on("world_updated", () => { setWorldGenText(""); loadRoom(); });
     on("character_updated", loadRoom);
+    on("world_gen_chunk", (p) => setWorldGenText((prev) => prev + p.content));
+    on("world_gen_done", () => {});
   }, [on]);
 
   const handleResetWorld = async () => {
@@ -232,7 +235,12 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
             <button onClick={handleGenerateWorld} disabled={generatingWorld}
               className="w-full py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50">
               {generatingWorld ? "AI 编织世界中..." : "生成世界"}
-            </button>
+          </button>
+          {generatingWorld && worldGenText && (
+            <div className="mt-3 p-3 rounded-lg bg-gray-800/50 border border-amber-900/30 text-sm text-gray-300 leading-relaxed">
+              {worldGenText}<span className="inline-block w-1.5 h-4 bg-amber-400 ml-0.5 animate-pulse" />
+            </div>
+          )}
           </div>
         ) : !worldDone ? (
           <div className="text-center text-gray-500 mt-20">

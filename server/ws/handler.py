@@ -733,11 +733,17 @@ async def _handle_generate_world(room, player, payload, ws, rid):
         if custom_style: style_hint += f"额外要求：{custom_style}。"
         ai_client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=30.0)
         prompt = f"{style_hint}为以下世界观写一段150字以内的初始场景描述：世界观：{template['name']} 概述：{template['overview']} 势力：{', '.join(template['factions'])} 直接写叙事文本。"
+        scene = ""
         try:
-            resp = await ai_client.chat.completions.create(model=DEEPSEEK_MODEL, messages=[{"role": "user", "content": prompt}], temperature=0.9, max_tokens=300)
-            scene = resp.choices[0].message.content.strip()
+            stream = await ai_client.chat.completions.create(model=DEEPSEEK_MODEL, messages=[{"role": "user", "content": prompt}], temperature=0.9, max_tokens=300, stream=True)
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    scene += chunk.choices[0].delta.content
+                    await _broadcast(room_code, {"type": "world_gen_chunk", "payload": {"content": chunk.choices[0].delta.content}})
+            scene = scene.strip()
         except Exception:
             scene = f"欢迎来到{template['name']}。{template['overview']}"
+        await _broadcast(room_code, {"type": "world_gen_done", "payload": {}})
         from routers.worlds import _generate_presets_for_template
         presets = await _generate_presets_for_template(template, scene, max(2, len(room["players"])), style, tone, custom_style)
         world = {
