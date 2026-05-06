@@ -86,8 +86,11 @@ TEMPLATES = {
 
 class GenerateRequest(BaseModel):
     type: str  # "template", "web_search", "txt_upload"
-    ref: str = ""  # template name, search keyword, or filename
+    ref: str = ""
     room_code: str = ""
+    style: str = ""
+    tone: str = ""
+    custom_style: str = ""
 
 
 class UploadTxtResponse(BaseModel):
@@ -212,7 +215,13 @@ async def _generate_initial_scene(template: dict) -> str:
 
 
 async def _generate_from_search(query: str) -> dict:
-    prompt = f"""请基于作品《{query}》构建一个跑团世界模组。你需要输出一个 JSON 对象，包含以下字段：
+    style_note = ""
+    if req.style: style_note += f" 文风：{req.style}。"
+    if req.tone: style_note += f" 基调：{req.tone}。"
+    if req.custom_style: style_note += f" 额外要求：{req.custom_style}。"
+    if style_note: style_note = f"\n创作要求：{style_note}\n"
+
+    prompt = f"""请基于作品《{query}》构建一个跑团世界模组。{style_note}你需要输出一个 JSON 对象，包含以下字段：
 
 {{
   "overview": "世界概述（200字以内）",

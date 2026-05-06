@@ -18,6 +18,9 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   const [worldRef, setWorldRef] = useState("isekai_adventure");
   const [searchQuery, setSearchQuery] = useState("");
   const [generatingWorld, setGeneratingWorld] = useState(false);
+  const [style, setStyle] = useState("");
+  const [tone, setTone] = useState("");
+  const [customStyle, setCustomStyle] = useState("");
   const [error, setError] = useState("");
   const [expandedChar, setExpandedChar] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -64,7 +67,8 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   const handleGenerateWorld = async () => {
     setGeneratingWorld(true); setError("");
     try {
-      const body = { type: worldType, ref: worldType === "web_search" ? searchQuery : worldRef, room_code: roomCode };
+      const body = { type: worldType, ref: worldType === "web_search" ? searchQuery : worldRef, room_code: roomCode,
+        style, tone, custom_style: customStyle };
       await api("/api/worlds/generate", { method: "POST", body: JSON.stringify(body) });
       await loadRoom();
     } catch (e) { setError(e.message); }
@@ -196,6 +200,30 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               <input className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm focus:border-amber-500 focus:outline-none"
                 placeholder="描述你想要的世界，如：赛博朋克修仙门派" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             )}
+            {/* Style options */}
+            <div className="grid grid-cols-2 gap-2">
+              <select className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm"
+                value={style} onChange={(e) => setStyle(e.target.value)}>
+                <option value="">文风（可选）</option>
+                <option value="轻松搞笑">轻松搞笑</option>
+                <option value="黑暗严肃">黑暗严肃</option>
+                <option value="史诗奇幻">史诗奇幻</option>
+                <option value="日系轻小说">日系轻小说</option>
+                <option value="硬核写实">硬核写实</option>
+                <option value="文艺唯美">文艺唯美</option>
+              </select>
+              <select className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm"
+                value={tone} onChange={(e) => setTone(e.target.value)}>
+                <option value="">剧情基调（可选）</option>
+                <option value="欢乐向">欢乐向</option>
+                <option value="严肃向">严肃向</option>
+                <option value="恐怖向">恐怖向</option>
+                <option value="治愈向">治愈向</option>
+                <option value="热血向">热血向</option>
+              </select>
+            </div>
+            <input className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white text-sm focus:border-amber-500 focus:outline-none"
+              placeholder="额外创作要求（可选），如：禁止出现魔法少女" value={customStyle} onChange={(e) => setCustomStyle(e.target.value)} />
             <button onClick={handleGenerateWorld} disabled={generatingWorld}
               className="w-full py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50">
               {generatingWorld ? "AI 编织世界中..." : "生成世界"}

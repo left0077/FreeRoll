@@ -3,8 +3,7 @@ import { api, setBackendUrl, getBackendUrl } from "../utils/api";
 import { useCookie } from "../hooks/useCookie";
 
 export default function HomePage({ onEnterLobby, onWorldBuilder }) {
-  const { nickname, setNickname, savePlayerId, getPlayerId } = useCookie();
-  // Check URL for room code (shareable link)
+  const { nickname, setNickname, savePlayerId, getPlayerId, getLastGame, clearLastGame } = useCookie();
   const urlParams = new URLSearchParams(window.location.search);
   const urlRoom = urlParams.get("room") || "";
   const [roomCode, setRoomCode] = useState(urlRoom.toUpperCase());
@@ -13,6 +12,9 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
   const [loading, setLoading] = useState(false);
   const [autoJoining, setAutoJoining] = useState(!!urlRoom);
   const [error, setError] = useState("");
+
+  // Check for saved game
+  const lastGame = getLastGame();
 
   // Auto-join: if room in URL and nickname already saved (not freshly typed), join immediately
   const nicknameLoaded = useRef(false);
@@ -64,6 +66,19 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
     setLoading(false);
   };
 
+  const handleResume = async () => {
+    if (!lastGame || !nickname.trim()) return;
+    setLoading(true); setError("");
+    try {
+      const data = await api(`/api/rooms/${lastGame.roomCode}/join`, {
+        method: "POST",
+        body: JSON.stringify({ nickname: nickname.trim(), player_id: lastGame.playerId }),
+      });
+      onEnterLobby(lastGame.roomCode, data.player_id, false);
+    } catch (e) { setError("无法重新加入：" + e.message); }
+    setLoading(false);
+  };
+
   const handleSaveSettings = () => {
     setBackendUrl(backendUrl);
     setShowSettings(false);
@@ -76,6 +91,13 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
 
       {invited && (
         <p className="text-amber-400 text-sm bg-amber-900/20 px-4 py-2 rounded-lg">{invited}，输入昵称加入</p>
+      )}
+
+      {lastGame && nickname && (
+        <button onClick={handleResume} disabled={loading}
+          className="w-full max-w-sm py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold disabled:opacity-50">
+          {loading ? "重新加入中..." : `继续游戏 → 房间 ${lastGame.roomCode}`}
+        </button>
       )}
 
       <div className="w-full max-w-sm space-y-4">

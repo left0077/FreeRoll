@@ -15,11 +15,25 @@ export function useCookie() {
 
   const savePlayerId = useCallback((roomCode, playerId) => {
     localStorage.setItem(PLAYER_KEY_PREFIX + roomCode, playerId);
+    localStorage.setItem("freeroll_last_room", roomCode);
+    localStorage.setItem("freeroll_last_player", playerId);
   }, []);
 
   const getPlayerId = useCallback((roomCode) => {
     return localStorage.getItem(PLAYER_KEY_PREFIX + roomCode) || null;
   }, []);
 
-  return { nickname, setNickname, savePlayerId, getPlayerId };
+  const getLastGame = useCallback(() => {
+    const code = localStorage.getItem("freeroll_last_room");
+    const pid = localStorage.getItem("freeroll_last_player");
+    if (code && pid) return { roomCode: code, playerId: pid };
+    return null;
+  }, []);
+
+  const clearLastGame = useCallback(() => {
+    localStorage.removeItem("freeroll_last_room");
+    localStorage.removeItem("freeroll_last_player");
+  }, []);
+
+  return { nickname, setNickname, savePlayerId, getPlayerId, getLastGame, clearLastGame };
 }
