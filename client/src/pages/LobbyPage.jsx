@@ -75,8 +75,11 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
       await api("/api/worlds/generate", { method: "POST", body: JSON.stringify(body) });
       await loadRoom();
     } catch (e) { setError(e.message); }
-    setGeneratingWorld(false);
-    setWorldGenText("");
+    // Brief delay so user can see the completed streaming text before transition
+    setTimeout(() => {
+      setGeneratingWorld(false);
+      setWorldGenText("");
+    }, 500);
   };
 
   const handleGenerateChar = async () => {
