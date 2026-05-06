@@ -39,6 +39,10 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
     try {
       const data = await api(`/api/rooms/${roomCode}`);
       setRoom(data);
+      // Late join: go to game if room is playing AND player has a character
+      if (data.status === "playing" && data.characters?.find((c) => c.player_id === playerId)) {
+        onGameStart();
+      }
     } catch (e) { setError(e.message); }
   };
 
