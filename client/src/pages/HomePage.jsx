@@ -101,13 +101,18 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
           onChange={(e) => setNickname(e.target.value)}
         />
 
-        <button
-          onClick={handleCreate}
-          disabled={loading}
-          className="w-full py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50"
-        >
-          {loading ? "创建中..." : "创建房间"}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleCreate} disabled={loading}
+            className="flex-1 py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50">
+            {loading ? "创建中..." : "创建房间"}
+          </button>
+          {lastGame && nickname && (
+            <button onClick={handleResume} disabled={loading}
+              className="flex-1 py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold disabled:opacity-50">
+              继续游戏
+            </button>
+          )}
+        </div>
 
         <div className="flex items-center gap-2">
           <div className="flex-1 h-px bg-gray-700" />
@@ -130,13 +135,6 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
         >
           {loading ? "加入中..." : "加入房间"}
         </button>
-
-        {lastGame && nickname && (
-          <button onClick={handleResume} disabled={loading}
-            className="w-full py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold disabled:opacity-50">
-            {loading ? "重新加入中..." : `继续游戏 → 房间 ${lastGame.roomCode}`}
-          </button>
-        )}
 
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
       </div>
