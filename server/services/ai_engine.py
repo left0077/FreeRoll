@@ -124,8 +124,13 @@ def build_messages(room: dict, player_input: str, player_character_name: str) ->
         if role:
             messages.append({"role": role, "content": content})
 
-    # Current player input
-    messages.append({"role": "user", "content": f"[{player_character_name}]: {player_input}"})
+    # Current player input — embed style requirement inline so AI can't ignore it
+    style_hint = ""
+    if wm:
+        c = wm.get("content", wm)
+        desc = c.get("style_desc") or c.get("style")
+        if desc: style_hint = f"（注意：本局文风要求是{desc}，请严格按此风格描述行动）"
+    messages.append({"role": "user", "content": f"[{player_character_name}]: {style_hint} {player_input}"})
 
     return messages
 
