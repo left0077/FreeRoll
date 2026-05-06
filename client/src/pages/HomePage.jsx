@@ -16,15 +16,14 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
   // Check for saved game
   const lastGame = getLastGame();
 
-  // Auto-join: if room in URL and nickname already saved (not freshly typed), join immediately
-  const nicknameLoaded = useRef(false);
+  // Auto-join on mount only if nickname was already saved (not typed fresh)
+  const didAutoJoin = useRef(false);
   useEffect(() => {
-    if (urlRoom && nickname.trim() && !loading && !nicknameLoaded.current) {
-      nicknameLoaded.current = true;
-      // Small delay so user sees the page before redirect
+    if (urlRoom && nickname.trim() && !loading && !didAutoJoin.current) {
+      didAutoJoin.current = true;
       setTimeout(() => handleJoin(), 300);
     }
-  }, [urlRoom, nickname]);
+  }, []); // Only run on mount
 
   const handleCreate = async () => {
     if (!nickname.trim()) return setError("请输入你的昵称");
