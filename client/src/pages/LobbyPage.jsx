@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { flushSync } from "react-dom";
 import { api } from "../utils/api";
 
 const TEMPLATES = [
@@ -20,7 +19,6 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   const [searchQuery, setSearchQuery] = useState("");
   const [generatingWorld, setGeneratingWorld] = useState(false);
   const [worldGenText, setWorldGenText] = useState("");
-  const worldGenRef = useRef(null);
   const [style, setStyle] = useState("");
   const [tone, setTone] = useState("");
   const [customStyle, setCustomStyle] = useState("");
@@ -49,9 +47,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
     on("world_updated", () => { loadRoom(); });
     on("character_updated", loadRoom);
     on("world_gen_chunk", (p) => {
-      console.log('[CHUNK]', p.content);
-      if (worldGenRef.current) worldGenRef.current.textContent += p.content;
-      else console.log('[CHUNK] REF NULL');
+      setWorldGenText((prev) => prev + p.content);
     });
     on("world_gen_done", () => {});
   }, [on]);
@@ -74,8 +70,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   };
 
   const handleGenerateWorld = async () => {
-    setError("");
-    flushSync(() => setGeneratingWorld(true));
+    setGeneratingWorld(true); setError(""); setWorldGenText("");
     try {
       const body = { type: worldType, ref: worldType === "web_search" ? searchQuery : worldRef, room_code: roomCode,
         style, tone, custom_style: customStyle };
