@@ -79,6 +79,7 @@ export async function api(path, options = {}) {
       } catch (e) {
         // WS failed, fall through to HTTP
         if (e.message === "WebSocket not connected") {
+          console.log('[API] WS not connected, using HTTP fallback for', method, path);
           // Fall through
         } else {
           throw e;
