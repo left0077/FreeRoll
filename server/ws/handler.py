@@ -664,8 +664,9 @@ async def _handle_start_game(room, player, payload, ws, rid):
     room["turn_number"] = 0
     room["current_player_id"] = room["characters"][0].player_id
     wm = room.get("world_module") or {}
-    initial_scene = wm.get("content", {}).get("initial_scene", "冒险开始了...")
-    add_message(room["code"], None, "narrative", initial_scene)
+    initial_scene = wm.get("content", {}).get("initial_scene", "") or "冒险开始了..."
+    if initial_scene:
+        add_message(room["code"], None, "narrative", initial_scene)
 
     await _reply(ws, {"status": "playing"}, rid)
     await _broadcast(room["code"], {
