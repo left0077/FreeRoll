@@ -89,18 +89,18 @@ export default function HomePage({ onEnterLobby, onWorldBuilder }) {
       <h1 className="text-4xl font-bold text-amber-400 mb-2">FreeRoll</h1>
       <p className="text-gray-400 mb-8">AI 主持的文字跑团冒险</p>
 
-      {urlRoom && (
-        <p className="text-amber-400 text-sm bg-amber-900/20 px-4 py-2 rounded-lg">你被邀请加入房间 {urlRoom.toUpperCase()}，输入昵称加入</p>
-      )}
-
-      {lastGame && nickname && (
-        <button onClick={handleResume} disabled={loading}
-          className="w-full max-w-sm py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold disabled:opacity-50">
-          {loading ? "重新加入中..." : `继续游戏 → 房间 ${lastGame.roomCode}`}
-        </button>
-      )}
-
       <div className="w-full max-w-sm space-y-4">
+        {urlRoom && (
+          <p className="text-amber-400 text-sm bg-amber-900/20 px-4 py-2 rounded-lg">你被邀请加入房间 {urlRoom.toUpperCase()}，输入昵称加入</p>
+        )}
+
+        {lastGame && nickname && (
+          <button onClick={handleResume} disabled={loading}
+            className="w-full py-3 rounded-lg bg-green-700 hover:bg-green-600 text-white font-bold disabled:opacity-50">
+            {loading ? "重新加入中..." : `继续游戏 → 房间 ${lastGame.roomCode}`}
+          </button>
+        )}
+
         <input
           className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none"
           placeholder="你的昵称"
