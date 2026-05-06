@@ -69,20 +69,28 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
     });
   };
 
-  const handleGenerateWorld = async () => {
+  const handleGenerateWorld = () => {
     setGeneratingWorld(true); setError(""); setWorldGenText("");
-    try {
-      const body = { type: worldType, ref: worldType === "web_search" ? searchQuery : worldRef, room_code: roomCode,
-        style, tone, custom_style: customStyle };
-      await api("/api/worlds/generate", { method: "POST", body: JSON.stringify(body) });
-      await loadRoom();
-    } catch (e) { setError(e.message); }
-    // Brief delay so user can see the completed streaming text before transition
-    setTimeout(() => {
-      setGeneratingWorld(false);
-      setWorldGenText("");
-    }, 500);
+    // Use WS send directly — no await, React renders between messages
+    const body = { type: worldType, ref: worldType === "web_search" ? searchQuery : worldRef, room_code: roomCode,
+      style, tone, custom_style: customStyle };
+    const sent = ws.send("generate_world", body);
+    if (!sent) {
+      // WS not connected, fallback to HTTP
+      api("/api/worlds/generate", { method: "POST", body: JSON.stringify(body) })
+        .then(() => loadRoom())
+        .catch((e) => setError(e.message))
+        .finally(() => setTimeout(() => { setGeneratingWorld(false); setWorldGenText(""); }, 500));
+    }
   };
+
+  // Handle generate_world response for WS path
+  useEffect(() => {
+    on("world_gen_done", async () => {
+      await loadRoom();
+      setTimeout(() => { setGeneratingWorld(false); setWorldGenText(""); }, 500);
+    });
+  }, [on]);
 
   const handleGenerateChar = async () => {
     if (!charDesc.trim()) return;
