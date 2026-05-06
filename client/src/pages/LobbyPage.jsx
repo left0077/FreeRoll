@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { api } from "../utils/api";
 
 const TEMPLATES = [
@@ -72,7 +73,8 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   };
 
   const handleGenerateWorld = async () => {
-    setGeneratingWorld(true); setError("");
+    setError("");
+    flushSync(() => setGeneratingWorld(true));
     try {
       const body = { type: worldType, ref: worldType === "web_search" ? searchQuery : worldRef, room_code: roomCode,
         style, tone, custom_style: customStyle };
