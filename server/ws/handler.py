@@ -741,7 +741,7 @@ async def _handle_generate_world(room, player, payload, ws, rid):
         presets = await _generate_presets_for_template(template, scene, max(2, len(room["players"])), style, tone, custom_style)
         world = {
             "source_type": "template", "source_ref": ref,
-            "content": {"overview": template["overview"], "factions": template["factions"], "custom_rules": template["rules"], "bar_schema": template.get("bar_schema", {}), "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}), "initial_scene": scene, "style": payload.get("style", ""), "tone": payload.get("tone", ""), "custom_style": payload.get("custom_style", "")},
+            "content": {"overview": template["overview"], "factions": template["factions"], "custom_rules": template["rules"], "bar_schema": template.get("bar_schema", {}), "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}), "initial_scene": scene, "style": payload.get("style", ""), "style_desc": payload.get("style", ""), "tone": payload.get("tone", ""), "custom_style": payload.get("custom_style", "")},
             "preset_characters": presets,
         }
     else:
