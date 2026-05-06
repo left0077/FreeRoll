@@ -89,8 +89,8 @@ async def handle_ws(ws: WebSocket, room_code: str, player_id: str):
             elif msg_type == "get_room":
                 await _reply(ws, _build_room_state(room), data.get("_rid"))
             elif msg_type == "join_room":
-                p = add_player(room_code, payload.get("nickname", "玩家"), player_id=payload.get("player_id"))
-                await _reply(ws, {"player_id": p.id if p else "", "code": room_code, "error": None if p else "无法加入"}, data.get("_rid"))
+                p, err = add_player(room_code, payload.get("nickname", "玩家"), player_id=payload.get("player_id"))
+                await _reply(ws, {"player_id": p.id if p else "", "code": room_code, "error": err if not p else None}, data.get("_rid"))
                 if p:
                     await _broadcast(room_code, {"type": "player_joined", "payload": {"player_id": p.id, "nickname": p.nickname, "online_count": len(CONNECTIONS.get(room_code, []))}}, exclude=ws)
             elif msg_type == "start_game":

@@ -104,26 +104,32 @@ def find_player(code: str, player_id: str) -> Player | None:
     return None
 
 
-def add_player(code: str, nickname: str, is_owner: bool = False, player_id: str | None = None) -> Player | None:
+def add_player(code: str, nickname: str, is_owner: bool = False, player_id: str | None = None) -> tuple[Player | None, str]:
+    """Returns (player, error_reason). Player is None on failure."""
     room = get_room(code)
-    if not room or room["status"] != "waiting":
-        return None
+    if not room:
+        return None, "房间不存在"
 
-    # Reconnect: same player_id returning
+    # Reconnect: same player_id returning — always allowed regardless of room status
     if player_id:
         existing = find_player(code, player_id)
         if existing:
             existing.is_online = True
-            existing.nickname = nickname  # allow name change
-            return existing
+            existing.nickname = nickname
+            return existing, ""
+
+    # Allow new players in waiting or playing rooms (late join)
+    if room["status"] == "ended":
+        return None, "游戏已结束"
 
     if len(room["players"]) >= 12:
-        return None
+        return None, "房间已满（最多12人）"
+
     player = Player(nickname=nickname, is_owner=is_owner)
     if player_id:
         player.id = player_id
     room["players"].append(player)
-    return player
+    return player, ""
 
 
 def remove_player(code: str, player_id: str):

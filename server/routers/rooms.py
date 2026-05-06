@@ -28,7 +28,7 @@ class RollbackRequest(BaseModel):
 @router.post("")
 async def api_create_room(req: CreateRoomRequest):
     room = create_room(character_mode=req.character_mode)
-    player = add_player(room["code"], req.nickname, is_owner=True)
+    player, _ = add_player(room["code"], req.nickname, is_owner=True)
     return {
         "code": room["code"],
         "player_id": player.id,
@@ -73,9 +73,9 @@ async def api_get_room(code: str):
 
 @router.post("/{code}/join")
 async def api_join_room(code: str, req: JoinRequest):
-    player = add_player(code.upper(), req.nickname, player_id=req.player_id)
+    player, err = add_player(code.upper(), req.nickname, player_id=req.player_id)
     if not player:
-        raise HTTPException(status_code=400, detail="无法加入房间（房间不存在/已开始/已满）")
+        raise HTTPException(status_code=400, detail=err or "无法加入房间")
     return {"player_id": player.id, "code": code.upper(), "reconnected": req.player_id is not None and player.id == req.player_id}
 
 
