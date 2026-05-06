@@ -117,13 +117,17 @@ async def api_generate_world(req: GenerateRequest):
         if not template:
             available = list(TEMPLATES.keys())
             raise HTTPException(status_code=400, detail=f"模板不存在，可用：{available}")
-        initial_scene = await _generate_initial_scene(template, req.style, req.tone, req.custom_style)
         player_count = 2
         if req.room_code:
             room = get_room(req.room_code.upper())
             if room:
                 player_count = max(2, len(room["players"]))
-        presets = await _generate_presets_for_template(template, initial_scene, player_count, req.style, req.tone, req.custom_style)
+        # Run scene and presets in parallel
+        import asyncio
+        initial_scene, presets = await asyncio.gather(
+            _generate_initial_scene(template, req.style, req.tone, req.custom_style),
+            _generate_presets_for_template(template, template["overview"], player_count, req.style, req.tone, req.custom_style),
+        )
         world = {
             "source_type": "template",
             "source_ref": req.ref,
