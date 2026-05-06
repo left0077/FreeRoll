@@ -130,12 +130,16 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         setProcessing(false);
         break;
       case "gm_narrative":
-        // Finalize: streaming text (if any) becomes permanent message
+        // Avoid duplicate: streaming text already added by gm_narrative_chunk_done
         setStreamingText((prev) => {
-          if (prev) {
+          if (prev && prev !== payload.content) {
             setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: prev, turn_number: payload.turn_number }]);
-          } else {
-            setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }]);
+          } else if (!prev) {
+            setMessages((msgs) => {
+              const last = msgs[msgs.length - 1];
+              if (last?.type === "narrative" && last.content === payload.content) return msgs;
+              return [...msgs, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }];
+            });
           }
           return "";
         });

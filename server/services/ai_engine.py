@@ -235,7 +235,7 @@ async def process_action(room: dict, player_input: str, character_name: str,
             narrative = (narrative or "") + (narrative2 or "")
 
     # Split on --- : before is narrative, after is control markers
-    _parse_mixed_response(narrative or "", result)
+    _parse_mixed_response(_repair_xml(narrative or ""), result)
     narrative = result["narrative"]
 
     # Store state for potential resume
@@ -313,10 +313,64 @@ async def resume_with_roll(prev_result: dict, dice_args: dict, on_chunk=None) ->
         "ending_suggested": None,
         "suggested_actions": [],
     }
-    _parse_mixed_response(narrative2 or "", result)
-    # Also parse second call for controls (NEXT, ACTIONS, PLOT, etc.)
-    # First call's controls were already processed in process_action
+    _parse_mixed_response(_repair_xml(narrative2 or ""), result)
     return result
+    return result
+
+
+def _repair_xml(text: str) -> str:
+    """Auto-repair malformed AI XML output. Ensures <narrative> and <controls> exist."""
+    if not text or not text.strip():
+        return "<narrative></narrative><controls></controls>"
+
+    has_narrative_open = "<narrative>" in text
+    has_narrative_close = "</narrative>" in text
+    has_controls_open = "<controls>" in text
+    has_controls_close = "</controls>" in text
+
+    # If already well-formed, return as-is
+    if has_narrative_open and has_narrative_close and has_controls_open and has_controls_close:
+        return text
+
+    # Extract narrative: text before <controls> if exists, otherwise all text before XML tags
+    narrative = ""
+    controls = ""
+    rest = text
+
+    # Try to find existing tags
+    n_start = text.find("<narrative>")
+    n_end = text.find("</narrative>")
+    c_start = text.find("<controls>")
+    c_end = text.find("</controls>")
+
+    if n_start >= 0 and n_end > n_start:
+        narrative = text[n_start + len("<narrative>"):n_end]
+        rest = text[:n_start] + text[n_end + len("</narrative>"):]
+    elif c_start >= 0:
+        # No narrative tags — use text before <controls>
+        narrative = text[:c_start].strip()
+        rest = text[c_start:]
+    else:
+        # No tags at all — use all text as narrative
+        narrative = text.strip()
+        rest = ""
+
+    if c_start >= 0 and c_end > c_start:
+        controls = text[c_start + len("<controls>"):c_end]
+    elif "<controls>" in rest:
+        cs = rest.find("<controls>")
+        controls = rest[cs + len("<controls>"):].strip()
+        # If no closing tag, take everything after <controls>
+        if "</controls>" in controls:
+            controls = controls[:controls.find("</controls>")]
+    else:
+        controls = ""
+
+    # Strip any leftover XML fragments from narrative
+    import re as _re2
+    narrative = _re2.sub(r'</?[a-zA-Z]+[^>]*>', '', narrative).strip()
+
+    return f"<narrative>{narrative}</narrative><controls>{controls}</controls>"
 
 
 def _parse_mixed_response(text: str, result: dict):
