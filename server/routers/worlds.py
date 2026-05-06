@@ -216,7 +216,7 @@ async def _generate_initial_scene(template: dict) -> str:
 
 async def _generate_from_search(query: str, style: str = "", tone: str = "", custom_style: str = "") -> dict:
     style_note = ""
-    if style: style_note += f" 文风：请使用{style}风格写作。"
+    if style: style_note += f" 文风：所有叙事文本必须严格使用{style}风格写作。这不是建议，是强制要求。如果{style}是诗歌体，就用诗歌写；如果是喷子体，就用粗俗吐槽写。"
     if tone:
         tightness = {"strict": "请严格围绕主线展开剧情。", "free": "请放任玩家自由探索世界，不必急于推进主线。"}.get(tone, "")
         style_note += f" 主线紧密度：{tightness}"
