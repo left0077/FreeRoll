@@ -19,7 +19,6 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   const [searchQuery, setSearchQuery] = useState("");
   const [generatingWorld, setGeneratingWorld] = useState(false);
   const [worldGenText, setWorldGenText] = useState("");
-  const worldGenRef = useRef(null);
   const [style, setStyle] = useState("");
   const [tone, setTone] = useState("");
   const [customStyle, setCustomStyle] = useState("");
@@ -48,10 +47,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
     on("world_updated", () => { loadRoom(); });
     on("character_updated", loadRoom);
     on("world_gen_chunk", (p) => {
-      // 30ms delay between chunks for visible typing effect via DOM ref
-      setTimeout(() => {
-        if (worldGenRef.current) worldGenRef.current.textContent += p.content;
-      }, 30);
+      setWorldGenText((prev) => prev + p.content);
     });
     on("world_gen_done", () => {});
   }, [on]);
@@ -267,8 +263,8 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
             </div>
             <div className="p-4 rounded-lg bg-gray-800/50 border border-gray-700 space-y-3">
               {generatingWorld ? (
-                <p ref={worldGenRef} className="text-gray-300 text-sm leading-relaxed">
-                  <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  {worldGenText || <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />}
                 </p>
               ) : (
                 <>
