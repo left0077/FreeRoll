@@ -3,7 +3,7 @@ import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from services.room_manager import (
     get_room, add_player, remove_player, add_message, add_dice_log,
-    save_snapshot, restore_snapshot
+    save_snapshot, restore_snapshot, touch_room
 )
 from services.ai_engine import process_action, resume_with_roll, execute_pending_roll
 from services.dice import roll as do_roll
@@ -178,6 +178,7 @@ async def _do_handle_action(room, player, payload):
     })
 
     # Save action message and broadcast to all players
+    touch_room(code)
     msg = add_message(code, player.id, "action", content)
     await _broadcast(code, {
         "type": "player_action_broadcast",
@@ -247,7 +248,14 @@ async def _do_handle_action(room, player, payload):
         import asyncio
         async def auto_roll():
             await asyncio.sleep(30)
-            if room.get("status") != "playing":  # Game ended during wait
+            if room.get("status") != "playing":
+                return
+            # Skip auto-roll if no one is connected — dead game
+            if not CONNECTIONS.get(code):
+                return
+            # Skip if the acting player is offline
+            next_p = next((p for p in room["players"] if p.id == player.id), None)
+            if not next_p or not next_p.is_online:
                 return
             pending = room.get("_pending_roll")
             if pending and pending["player_id"] == player.id:

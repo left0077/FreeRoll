@@ -41,6 +41,19 @@ if os.path.exists(dist_path):
     app.mount("/", StaticFiles(directory=dist_path, html=True), name="static")
 
 
+@app.on_event("startup")
+async def start_cleanup():
+    import asyncio
+    from services.room_manager import cleanup_idle_rooms
+    async def cleanup_loop():
+        while True:
+            await asyncio.sleep(600)  # Every 10 minutes
+            removed = cleanup_idle_rooms(60)
+            if removed > 0:
+                print(f"[CLEANUP] Removed {removed} idle rooms", flush=True)
+    asyncio.create_task(cleanup_loop())
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host=HOST, port=PORT, reload=True)

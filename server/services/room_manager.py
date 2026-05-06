@@ -55,9 +55,17 @@ def create_room(character_mode: str = "create") -> dict:
         "snapshots": {},  # {turn_number: [character_states]}
         "created_at": datetime.now(timezone.utc).isoformat(),
         "finished_at": None,
+        "last_activity": datetime.now(timezone.utc).isoformat(),
     }
     ROOMS[code] = room
     return room
+
+
+def touch_room(code: str):
+    """Update last activity timestamp."""
+    room = ROOMS.get(code)
+    if room:
+        room["last_activity"] = datetime.now(timezone.utc).isoformat()
 
 
 def get_room(code: str) -> dict | None:
@@ -66,6 +74,24 @@ def get_room(code: str) -> dict | None:
 
 def delete_room(code: str):
     ROOMS.pop(code, None)
+
+
+def cleanup_idle_rooms(max_idle_minutes: int = 60) -> int:
+    """Remove rooms with no activity for specified minutes. Returns count removed."""
+    now = datetime.now(timezone.utc)
+    to_remove = []
+    for code, room in ROOMS.items():
+        last = room.get("last_activity", room.get("created_at", ""))
+        try:
+            last_dt = datetime.fromisoformat(last)
+        except (ValueError, TypeError):
+            last_dt = datetime.fromisoformat(room["created_at"])
+        idle_minutes = (now - last_dt).total_seconds() / 60
+        if idle_minutes > max_idle_minutes:
+            to_remove.append(code)
+    for code in to_remove:
+        ROOMS.pop(code, None)
+    return len(to_remove)
 
 
 def find_player(code: str, player_id: str) -> Player | None:
