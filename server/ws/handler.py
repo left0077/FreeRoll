@@ -230,7 +230,7 @@ async def _do_handle_action(room, player, payload):
     if ai_result.get("pending_roll"):
         roll_args = ai_result["pending_roll"]
         # Store pending state and start auto-roll timeout
-        room["_pending_roll"] = {"player_id": player.id, "ai_result": ai_result, "roll_args": roll_args}
+        room["_pending_roll"] = {"player_id": player.id, "ai_result": ai_result, "roll_args": roll_args, "on_chunk": on_chunk}
         await _send_to_player(code, player.id, {
             "type": "roll_request",
             "payload": {
@@ -260,7 +260,7 @@ async def _do_handle_action(room, player, payload):
             pending = room.get("_pending_roll")
             if pending and pending["player_id"] == player.id:
                 try:
-                    ai_result2 = await resume_with_roll(ai_result, roll_args)
+                    ai_result2 = await resume_with_roll(ai_result, roll_args, on_chunk=roll_on_chunk)
                     room.pop("_pending_roll", None)
                     await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
                     await _broadcast(code, {"type": "gm_narrative_chunk", "payload": {"content": "（自动掷骰）", "turn_number": room["turn_number"]}})
@@ -494,6 +494,7 @@ async def _handle_roll_confirm(room, player):
     room.pop("_pending_roll", None)
     ai_result = pending["ai_result"]
     roll_args = pending["roll_args"]
+    roll_on_chunk = pending.get("on_chunk")
 
     # Phase 1: Execute dice immediately → broadcast result with animation
     char = next((c for c in room["characters"] if c.player_id == player.id), None)
@@ -511,7 +512,7 @@ async def _handle_roll_confirm(room, player):
 
     # Phase 2: Resume AI to get narrative (runs in background)
     try:
-        ai_result2 = await resume_with_roll(ai_result, roll_args)
+        ai_result2 = await resume_with_roll(ai_result, roll_args, on_chunk=roll_on_chunk)
         await _process_ai_result(room, code, ai_result2, player, ai_result.get("state_changes", []))
     except Exception:
         import traceback
