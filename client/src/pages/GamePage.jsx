@@ -112,13 +112,8 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         setStreamingText((prev) => prev + payload.content);
         break;
       case "gm_narrative_chunk_done":
-        setStreamingText((prev) => {
-          if (prev) {
-            setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: prev, turn_number: payload.turn_number }]);
-          }
-          return "";
-        });
-        setProcessing(false);
+        setStreamingText("");
+        break;
         break;
       case "gm_narrative_done":
         setStreamingText((prev) => {
@@ -132,15 +127,7 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
       case "gm_narrative":
         // Avoid duplicate: streaming text already added by gm_narrative_chunk_done
         setStreamingText((prev) => {
-          if (prev && prev !== payload.content) {
-            setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: prev, turn_number: payload.turn_number }]);
-          } else if (!prev) {
-            setMessages((msgs) => {
-              const last = msgs[msgs.length - 1];
-              if (last?.type === "narrative" && last.content === payload.content) return msgs;
-              return [...msgs, { id: Date.now(), type: "narrative", content: payload.content, turn_number: payload.turn_number }];
-            });
-          }
+          setMessages((msgs) => [...msgs, { id: Date.now(), type: "narrative", content: prev || payload.content, turn_number: payload.turn_number }]);
           return "";
         });
         setSuggestedActions(payload.suggested_actions || []);
