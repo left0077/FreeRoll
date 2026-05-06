@@ -44,7 +44,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   };
 
   useEffect(() => {
-    on("world_updated", () => { setWorldGenText(""); loadRoom(); });
+    on("world_updated", () => { loadRoom(); });
     on("character_updated", loadRoom);
     on("world_gen_chunk", (p) => setWorldGenText((prev) => prev + p.content));
     on("world_gen_done", () => {});
@@ -76,6 +76,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
       await loadRoom();
     } catch (e) { setError(e.message); }
     setGeneratingWorld(false);
+    setWorldGenText("");
   };
 
   const handleGenerateChar = async () => {
