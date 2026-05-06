@@ -135,7 +135,6 @@ async def api_generate_world(req: GenerateRequest):
                 "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}),
                 "initial_scene": initial_scene,
                 "style": req.style,
-                "style_desc": full_style_desc,
                 "tone": req.tone,
                 "custom_style": req.custom_style,
             },
@@ -232,21 +231,7 @@ async def _generate_initial_scene(template: dict, style: str = "", tone: str = "
 
 async def _generate_from_search(query: str, style: str = "", tone: str = "", custom_style: str = "") -> dict:
     style_note = ""
-    style_desc = ""
-    if style:
-        try:
-            desc_resp = await client.chat.completions.create(
-                model=DEEPSEEK_MODEL,
-                messages=[{"role": "user", "content": f'请用一句话（50字以内）简洁描述"{style}"这种文体的写作格式和语言特征。只描述格式要求，不要写例子。'}],
-                temperature=0.5, max_tokens=80,
-            )
-            style_desc = desc_resp.choices[0].message.content.strip()
-        except Exception:
-            style_desc = style
-        style_note += f" 文风要求：{style_desc}"
-
-    # Store the full style description (not just the name) for per-turn reinforcement
-    full_style_desc = style_desc or style
+    if style: style_note += f" 文风要求：所有叙事文本必须严格使用{style}风格来写作。"
     if tone:
         tightness = {"strict": "请严格围绕主线展开剧情。", "free": "请放任玩家自由探索世界，不必急于推进主线。"}.get(tone, "")
         style_note += f" 主线紧密度：{tightness}"

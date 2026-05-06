@@ -101,10 +101,7 @@ def build_messages(room: dict, player_input: str, player_character_name: str) ->
         c = wm.get("content", wm)
         # Style reminder — reinforced every turn so AI doesn't forget
         style_hints = []
-        if c.get("style_desc"):
-            style_hints.append(f"文风：{c['style_desc']}")
-        elif c.get("style"):
-            style_hints.append(f"文风必须是{c['style']}")
+        if c.get("style"): style_hints.append(f"文风：所有叙事必须严格使用{c['style']}风格")
         if c.get("tone"): style_hints.append(f"主线紧密度：{c['tone']}")
         if c.get("custom_style"): style_hints.append(c["custom_style"])
         if style_hints:
