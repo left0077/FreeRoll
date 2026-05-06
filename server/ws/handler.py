@@ -754,9 +754,12 @@ async def _handle_generate_world(room, player, payload, ws, rid):
 
         # Wait for presets to finish — they were generating in parallel
         presets = await preset_task
-        # Send presets as soon as ready, even if scene is still streaming
+        # Send presets one by one for streaming effect
         if presets:
-            await _broadcast(room["code"], {"type": "world_presets_ready", "payload": {"count": len(presets)}})
+            import asyncio as _asyncio
+            for i, char in enumerate(presets):
+                await _broadcast(room["code"], {"type": "world_preset_char", "payload": {"index": i, "total": len(presets), "character": char}})
+                await _asyncio.sleep(0.3)  # Small delay for visibility
         await _broadcast(room["code"], {"type": "world_gen_done", "payload": {}})
         world = {
             "source_type": "template", "source_ref": ref,

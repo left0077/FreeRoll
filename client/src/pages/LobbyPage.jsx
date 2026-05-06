@@ -86,7 +86,15 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
 
   // Handle generate_world response for WS path
   useEffect(() => {
-    on("world_presets_ready", () => loadRoom());
+    on("world_preset_char", (p) => {
+      // Streaming preset: append character to room's preset list
+      setRoom((prev) => {
+        if (!prev?.world_module) return prev;
+        const wm = { ...prev.world_module, preset_characters: [...(prev.world_module.preset_characters || [])] };
+        wm.preset_characters[p.index] = p.character;
+        return { ...prev, world_module: wm };
+      });
+    });
     on("world_gen_done", async () => {
       await loadRoom();
       setTimeout(() => { setGeneratingWorld(false); setWorldGenText(""); }, 500);
