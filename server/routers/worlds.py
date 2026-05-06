@@ -134,6 +134,9 @@ async def api_generate_world(req: GenerateRequest):
                 "bar_schema": template.get("bar_schema", {}),
                 "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}),
                 "initial_scene": initial_scene,
+                "style": req.style,
+                "tone": req.tone,
+                "custom_style": req.custom_style,
             },
             "preset_characters": presets,
         }

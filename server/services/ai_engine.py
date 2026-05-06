@@ -98,6 +98,15 @@ def build_messages(room: dict, player_input: str, player_character_name: str) ->
     # World module
     wm = room.get("world_module")
     if wm:
+        c = wm.get("content", wm)
+        # Style reminder — reinforced every turn so AI doesn't forget
+        style_hints = []
+        if c.get("style"): style_hints.append(f"文风必须是{c['style']}")
+        if c.get("tone"): style_hints.append(f"主线紧密度是{c['tone']}")
+        if c.get("custom_style"): style_hints.append(c["custom_style"])
+        if style_hints:
+            messages.append({"role": "system", "content": "【创作约束 — 每次叙事必须遵守】" + "；".join(style_hints)})
+
         world_text = _format_world_module(wm)
         messages.append({"role": "system", "content": world_text})
 
