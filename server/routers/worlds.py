@@ -117,13 +117,13 @@ async def api_generate_world(req: GenerateRequest):
         if not template:
             available = list(TEMPLATES.keys())
             raise HTTPException(status_code=400, detail=f"模板不存在，可用：{available}")
-        initial_scene = await _generate_initial_scene(template)
+        initial_scene = await _generate_initial_scene(template, req.style, req.tone, req.custom_style)
         player_count = 2
         if req.room_code:
             room = get_room(req.room_code.upper())
             if room:
                 player_count = max(2, len(room["players"]))
-        presets = await _generate_presets_for_template(template, initial_scene, player_count)
+        presets = await _generate_presets_for_template(template, initial_scene, player_count, req.style, req.tone, req.custom_style)
         world = {
             "source_type": "template",
             "source_ref": req.ref,
@@ -167,18 +167,24 @@ async def api_generate_world(req: GenerateRequest):
     return world
 
 
-async def _generate_presets_for_template(template: dict, scene: str, player_count: int = 2) -> list:
-    """Generate preset characters scaled to room size (min 3, max ~player_count+2)."""
+async def _generate_presets_for_template(template: dict, scene: str, player_count: int = 2, style: str = "", tone: str = "", custom_style: str = "") -> list:
+    """Generate preset characters scaled to room size."""
     count = max(3, min(player_count + 2, 6))
     bar_schema = template.get("bar_schema", {"HP": {"default": 20, "description": "生命值"}})
     bar_info = ", ".join([f"{k}({v['description']})" for k, v in bar_schema.items()])
 
+    style_note = ""
+    if style: style_note += f" 角色描述必须使用{style}风格。"
+    if tone: style_note += f" 主线紧密度：{tone}。"
+    if custom_style: style_note += f" 额外：{custom_style}。"
+
     prompt = f"""世界观：{template['name']} — {template['overview']}
 势力：{', '.join(template.get('factions', []))}
 可用数值条：{bar_info}
+{style_note}
 初始场景：{scene}
 
-为这个世界观生成恰好 {count} 个预设角色卡，输出 JSON 数组。角色要来自不同势力（每个势力至少一个）、性格互补、能力各异。格式：
+为这个世界观生成恰好 {count} 个预设角色卡，输出 JSON 数组。角色要来自不同势力、性格互补、能力各异。格式：
 [
   {{"name": "角色名", "bars": {{"HP": {{"current": 20, "max": 20}} }}, "tags": ["标签"], "attributes": {{}}, "inventory": ["物品"], "description": "角色简介"}}
 ]
@@ -197,9 +203,14 @@ async def _generate_presets_for_template(template: dict, scene: str, player_coun
         return []
 
 
-async def _generate_initial_scene(template: dict) -> str:
-    prompt = f"""为以下世界观写一段 150 字以内的初始场景描述，作为跑团冒险的开场：
+async def _generate_initial_scene(template: dict, style: str = "", tone: str = "", custom_style: str = "") -> str:
+    style_note = ""
+    if style: style_note += f" 文风：必须使用{style}风格。"
+    if tone: style_note += f" 主线：{tone}。"
+    if custom_style: style_note += f" {custom_style}。"
 
+    prompt = f"""为以下世界观写一段 150 字以内的初始场景描述，作为跑团冒险的开场：
+{style_note}
 世界观：{template['name']}
 概述：{template['overview']}
 势力：{', '.join(template['factions'])}
