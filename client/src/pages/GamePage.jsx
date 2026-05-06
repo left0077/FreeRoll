@@ -318,6 +318,13 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
           <button onClick={handleBack} className="text-gray-500 hover:text-gray-300 text-sm">离开</button>
           <span className="text-gray-600">|</span>
           <span className="text-amber-400 font-bold text-sm">回合 {turnNumber}</span>
+          <span className="text-gray-600">|</span>
+          <button onClick={() => {
+            const link = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+            navigator.clipboard.writeText(link);
+          }} className="text-gray-500 hover:text-amber-400 text-xs">
+            复制邀请链接
+          </button>
           {status === "connected" && <span className="w-2 h-2 rounded-full bg-green-500" title="已连接" />}
           {status === "connecting" && <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" title="连接中..." />}
           {status === "reconnecting" && <span className="text-yellow-400 text-xs animate-pulse">重连中...</span>}
