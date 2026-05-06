@@ -210,6 +210,9 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
                     {s || "默认"}
                   </button>
                 ))}
+                <input className="w-24 px-2 py-1 rounded-full bg-gray-800 border border-gray-700 text-white text-xs focus:border-amber-500 focus:outline-none"
+                  placeholder="自定义..." value={style && !["圣经体","文言文","申论风","轻小说","硬核写实"].includes(style) ? style : ""}
+                  onChange={(e) => setStyle(e.target.value)} />
               </div>
             </div>
             {/* Plot tightness: button selects */}
