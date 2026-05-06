@@ -8,7 +8,6 @@ from services.room_manager import get_room
 router = APIRouter(prefix="/api/worlds", tags=["worlds"])
 
 client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=30.0)
-fast_client = AsyncOpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=10.0)
 
 TEMPLATES = {
     "isekai_adventure": {
@@ -118,16 +117,7 @@ async def api_generate_world(req: GenerateRequest):
         if not template:
             available = list(TEMPLATES.keys())
             raise HTTPException(status_code=400, detail=f"模板不存在，可用：{available}")
-        # Run style description and scene generation in parallel
-        import asyncio
-        style_desc_task = _get_style_description(req.style) if req.style else None
-        scene_task = _generate_initial_scene(template, req.style, req.tone, req.custom_style)
-        if style_desc_task:
-            style_desc, initial_scene = await asyncio.gather(style_desc_task, scene_task)
-        else:
-            initial_scene = await scene_task
-            style_desc = ""
-
+        initial_scene = await _generate_initial_scene(template, req.style, req.tone, req.custom_style)
         player_count = 2
         if req.room_code:
             room = get_room(req.room_code.upper())
@@ -145,7 +135,6 @@ async def api_generate_world(req: GenerateRequest):
                 "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}),
                 "initial_scene": initial_scene,
                 "style": req.style,
-                "style_desc": style_desc,
                 "tone": req.tone,
                 "custom_style": req.custom_style,
             },
@@ -243,20 +232,6 @@ async def _generate_initial_scene(template: dict, style: str = "", tone: str = "
 async def _generate_from_search(query: str, style: str = "", tone: str = "", custom_style: str = "") -> dict:
     style_note = ""
     if style: style_note += f" 文风要求：所有叙事文本必须严格使用{style}风格来写作。"
-
-
-async def _get_style_description(style: str) -> str:
-    """Quick AI call (no thinking) to get a detailed style description."""
-    if not style: return ""
-    try:
-        resp = await fast_client.chat.completions.create(
-            model=DEEPSEEK_MODEL,
-            messages=[{"role": "user", "content": f'请用一句话（50字以内）简洁描述"{style}"这种文体的写作格式和语言特征。只描述格式要求。'}],
-            temperature=0.5, max_tokens=80,
-        )
-        return (resp.choices[0].message.content or "").strip()
-    except Exception:
-        return style
     if tone:
         tightness = {"strict": "请严格围绕主线展开剧情。", "free": "请放任玩家自由探索世界，不必急于推进主线。"}.get(tone, "")
         style_note += f" 主线紧密度：{tightness}"
