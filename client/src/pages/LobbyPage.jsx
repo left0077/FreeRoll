@@ -49,8 +49,9 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
     on("world_updated", () => { loadRoom(); });
     on("character_updated", loadRoom);
     on("world_gen_chunk", (p) => {
-      // Direct DOM update — bypasses React render cycle during await
+      console.log('[CHUNK]', p.content);
       if (worldGenRef.current) worldGenRef.current.textContent += p.content;
+      else console.log('[CHUNK] REF NULL');
     });
     on("world_gen_done", () => {});
   }, [on]);
