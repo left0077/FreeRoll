@@ -19,6 +19,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
   const [searchQuery, setSearchQuery] = useState("");
   const [generatingWorld, setGeneratingWorld] = useState(false);
   const [worldGenText, setWorldGenText] = useState("");
+  const worldGenRef = useRef(null);
   const [style, setStyle] = useState("");
   const [tone, setTone] = useState("");
   const [customStyle, setCustomStyle] = useState("");
