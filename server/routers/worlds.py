@@ -223,7 +223,8 @@ async def _generate_initial_scene(template: dict, style: str = "", tone: str = "
             temperature=0.9,
             max_tokens=300,
         )
-        return resp.choices[0].message.content.strip()
+        scene = (resp.choices[0].message.content or "").strip()
+        return scene or f"欢迎来到{template['name']}。{template['overview']}"
     except Exception:
         return f"欢迎来到{template['name']}。{template['overview']}"
 
