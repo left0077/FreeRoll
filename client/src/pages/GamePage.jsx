@@ -109,7 +109,8 @@ export default function GamePage({ roomCode, playerId, isOwner, ws, onLeave }) {
         }
         break;
       case "gm_narrative_chunk":
-        setStreamingText((prev) => prev + payload.content);
+        // Small delay for visible streaming effect
+        setTimeout(() => setStreamingText((prev) => prev + payload.content), 20);
         break;
       case "gm_narrative_chunk_done":
         // streamingText stays until gm_narrative finalizes it
