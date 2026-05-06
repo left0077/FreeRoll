@@ -141,7 +141,7 @@ async def api_generate_world(req: GenerateRequest):
     elif req.type == "web_search":
         if not req.ref:
             raise HTTPException(status_code=400, detail="请输入要搜索的作品名")
-        world = await _generate_from_search(req.ref)
+        world = await _generate_from_search(req.ref, req.style, req.tone, req.custom_style)
 
     elif req.type == "txt_upload":
         raise HTTPException(status_code=400, detail="请先使用 /api/worlds/upload-txt 上传文件")
@@ -214,13 +214,13 @@ async def _generate_initial_scene(template: dict) -> str:
         return f"欢迎来到{template['name']}。{template['overview']}"
 
 
-async def _generate_from_search(query: str) -> dict:
+async def _generate_from_search(query: str, style: str = "", tone: str = "", custom_style: str = "") -> dict:
     style_note = ""
-    if req.style: style_note += f" 文风：请使用{req.style}风格写作。"
-    if req.tone:
-        tightness = {"strict": "请严格围绕主线展开剧情，每次叙事都应推进主线进度。", "free": "请放任玩家自由探索世界，不必急于推进主线，让玩家主导节奏。"}.get(req.tone, "请适度围绕主线，同时允许玩家自由发挥。")
+    if style: style_note += f" 文风：请使用{style}风格写作。"
+    if tone:
+        tightness = {"strict": "请严格围绕主线展开剧情。", "free": "请放任玩家自由探索世界，不必急于推进主线。"}.get(tone, "")
         style_note += f" 主线紧密度：{tightness}"
-    if req.custom_style: style_note += f" 额外要求：{req.custom_style}。"
+    if custom_style: style_note += f" 额外要求：{custom_style}。"
     if style_note: style_note = f"\n创作要求：{style_note}\n"
 
     prompt = f"""请基于作品《{query}》构建一个跑团世界模组。{style_note}你需要输出一个 JSON 对象，包含以下字段：
