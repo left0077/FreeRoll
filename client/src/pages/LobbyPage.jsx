@@ -270,22 +270,17 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               )}
             </div>
             <div className="p-4 rounded-lg bg-gray-800/50 border border-gray-700 space-y-3">
-              {generatingWorld ? (
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  {worldGenText || <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />}
-                </p>
-              ) : (
-                <>
-                  <p className="text-gray-300 text-sm leading-relaxed">
-                    {room.world_module?.content?.overview || "世界已就绪，等待冒险者..."}
-                  </p>
-                  {room.world_module?.content?.factions?.length > 0 && (
-                    <div className="text-sm text-gray-400">势力：{room.world_module.content.factions.join(" · ")}</div>
-                  )}
-                  {room.world_module?.content?.custom_rules?.length > 0 && (
-                    <div className="text-sm text-amber-400/70">规则：{room.world_module.content.custom_rules.join("；")}</div>
-                  )}
-                </>
+              <p className="text-gray-300 text-sm leading-relaxed">
+                {generatingWorld ? (worldGenText || <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />) : (room.world_module?.content?.overview || "世界已就绪，等待冒险者...")}
+              </p>
+              {!generatingWorld && room.world_module?.content?.factions?.length > 0 && (
+                <div className="text-sm text-gray-400">势力：{room.world_module.content.factions.join(" · ")}</div>
+              )}
+              {!generatingWorld && room.world_module?.content?.custom_rules?.length > 0 && (
+                <div className="text-sm text-amber-400/70">规则：{room.world_module.content.custom_rules.join("；")}</div>
+              )}
+              {generatingWorld && (
+                <div className="text-xs text-gray-600">势力与规则加载中...</div>
               )}
             </div>
           </div>
