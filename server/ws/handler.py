@@ -731,7 +731,15 @@ async def _handle_generate_world(room, player, payload, ws, rid):
         if style: style_hint += f"文风必须是{style}。"
         if tone: style_hint += f"主线紧密度是{tone}。"
         if custom_style: style_hint += f"额外要求：{custom_style}。"
+        import asyncio
+        from routers.worlds import _generate_presets_for_template
         from services.ai_engine import client as ai_client
+
+        # Start preset generation in background while scene streams
+        preset_task = asyncio.create_task(
+            _generate_presets_for_template(template, template["overview"], max(2, len(room["players"])), style, tone, custom_style)
+        )
+
         prompt = f"{style_hint}为以下世界观写一段150字以内的初始场景描述：世界观：{template['name']} 概述：{template['overview']} 势力：{', '.join(template['factions'])} 直接写叙事文本。"
         scene = ""
         try:
@@ -743,9 +751,10 @@ async def _handle_generate_world(room, player, payload, ws, rid):
             scene = scene.strip()
         except Exception:
             scene = f"欢迎来到{template['name']}。{template['overview']}"
+
+        # Wait for presets to finish
+        presets = await preset_task
         await _broadcast(room["code"], {"type": "world_gen_done", "payload": {}})
-        from routers.worlds import _generate_presets_for_template
-        presets = await _generate_presets_for_template(template, scene, max(2, len(room["players"])), style, tone, custom_style)
         world = {
             "source_type": "template", "source_ref": ref,
             "content": {"overview": template["overview"], "factions": template["factions"], "custom_rules": template["rules"], "bar_schema": template.get("bar_schema", {}), "storyline": template.get("storyline", {"title": "冒险", "stages": ["??", "??"]}), "initial_scene": scene, "style": payload.get("style", ""), "tone": payload.get("tone", ""), "custom_style": payload.get("custom_style", "")},
