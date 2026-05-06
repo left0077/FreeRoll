@@ -247,11 +247,6 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
               className="w-full py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50">
               {generatingWorld ? "AI 编织世界中..." : "生成世界"}
           </button>
-          {generatingWorld && (
-            <div ref={worldGenRef} className="mt-3 p-3 rounded-lg bg-gray-800/50 border border-amber-900/30 text-sm text-gray-300 leading-relaxed">
-              <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />
-            </div>
-          )}
           </div>
         ) : !worldDone ? (
           <div className="text-center text-gray-500 mt-20">
@@ -259,6 +254,13 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
             <p className="text-sm">生成后即可创建或选择你的角色</p>
           </div>
         ) : null}
+
+        {/* Streaming world generation text — outside conditional, always visible while generating */}
+        {generatingWorld && (
+          <div ref={worldGenRef} className="max-w-lg mx-auto mt-4 p-3 rounded-lg bg-gray-800/50 border border-amber-900/30 text-sm text-gray-300 leading-relaxed">
+            <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />
+          </div>
+        )}
 
         {/* === World overview === */}
         {worldDone && (
