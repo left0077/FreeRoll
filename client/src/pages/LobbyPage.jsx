@@ -86,6 +86,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
 
   // Handle generate_world response for WS path
   useEffect(() => {
+    on("world_presets_ready", () => loadRoom());
     on("world_gen_done", async () => {
       await loadRoom();
       setTimeout(() => { setGeneratingWorld(false); setWorldGenText(""); }, 500);
@@ -287,7 +288,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
         )}
 
         {/* === Preset character selection === */}
-        {worldDone && !generatingWorld && room.world_module?.preset_characters?.length > 0 && !myChar && (
+        {worldDone && room.world_module?.preset_characters?.length > 0 && !myChar && (
           <div className="max-w-lg mx-auto mb-6">
             <h3 className="text-amber-400 font-bold mb-3">选择预设角色</h3>
             <div className="grid gap-2">
@@ -309,7 +310,7 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
         )}
 
         {/* === Character creation === */}
-        {worldDone && !generatingWorld && !myChar && (
+        {worldDone && !myChar && (
           <div className="max-w-md mx-auto space-y-4">
             <h3 className="text-lg font-bold text-amber-400">
               {room.world_module?.preset_characters?.length > 0 ? "或者，自定义角色" : "创建你的角色"}

@@ -752,8 +752,11 @@ async def _handle_generate_world(room, player, payload, ws, rid):
         except Exception:
             scene = f"欢迎来到{template['name']}。{template['overview']}"
 
-        # Wait for presets to finish
+        # Wait for presets to finish — they were generating in parallel
         presets = await preset_task
+        # Send presets as soon as ready, even if scene is still streaming
+        if presets:
+            await _broadcast(room["code"], {"type": "world_presets_ready", "payload": {"count": len(presets)}})
         await _broadcast(room["code"], {"type": "world_gen_done", "payload": {}})
         world = {
             "source_type": "template", "source_ref": ref,
