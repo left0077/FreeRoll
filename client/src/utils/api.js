@@ -57,6 +57,7 @@ export async function api(path, options = {}) {
   if (_wsRequest) {
     const msgType = findMessageType(method, path);
     if (msgType) {
+      console.log('[API] Using WS for', method, path);
       try {
         // Add player_id from URL search params
         if (path.includes("player_id=")) {
