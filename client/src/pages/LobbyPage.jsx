@@ -208,14 +208,14 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
             <div>
               <p className="text-xs text-gray-500 mb-1.5">文风（可选）</p>
               <div className="flex flex-wrap gap-1.5">
-                {["", "圣经体", "文言文", "申论风", "轻小说", "硬核写实"].map((s) => (
+                {["", "圣经体", "文言文", "申论风", "轻小说", "硬核写实", "喷子体"].map((s) => (
                   <button key={s} type="button" onClick={() => setStyle(style === s ? "" : s)}
                     className={`px-3 py-1 rounded-full text-xs ${style === s ? "bg-amber-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}>
                     {s || "默认"}
                   </button>
                 ))}
                 <input className="w-24 px-2 py-1 rounded-full bg-gray-800 border border-gray-700 text-white text-xs focus:border-amber-500 focus:outline-none"
-                  placeholder="自定义..." value={style && !["圣经体","文言文","申论风","轻小说","硬核写实"].includes(style) ? style : ""}
+                  placeholder="自定义..." value={style && !["圣经体","文言文","申论风","轻小说","硬核写实","喷子体"].includes(style) ? style : ""}
                   onChange={(e) => setStyle(e.target.value)} />
               </div>
             </div>
