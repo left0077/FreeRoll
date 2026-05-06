@@ -255,33 +255,34 @@ export default function LobbyPage({ roomCode, playerId, isOwner, ws, onGameStart
           </div>
         ) : null}
 
-        {/* Streaming world generation text — outside conditional, always visible while generating */}
-        {generatingWorld && (
-          <div ref={worldGenRef} className="max-w-lg mx-auto mt-4 p-3 rounded-lg bg-gray-800/50 border border-amber-900/30 text-sm text-gray-300 leading-relaxed">
-            <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />
-          </div>
-        )}
-
-        {/* === World overview === */}
-        {worldDone && (
+        {/* === World overview — shows streaming text during generation === */}
+        {(worldDone || generatingWorld) && (
           <div className="max-w-2xl mx-auto mb-8">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-amber-400 font-bold text-lg">
-                {TEMPLATES.find((t) => t.key === room.world_module?.source_ref)?.name || room.world_module?.source_ref || "世界模组"}
+                {generatingWorld ? "正在生成世界..." : TEMPLATES.find((t) => t.key === room.world_module?.source_ref)?.name || room.world_module?.source_ref || "世界模组"}
               </h3>
-              {isOwner && (
+              {isOwner && worldDone && (
                 <button onClick={handleResetWorld} className="text-xs text-gray-500 hover:text-red-400">重置</button>
               )}
             </div>
             <div className="p-4 rounded-lg bg-gray-800/50 border border-gray-700 space-y-3">
-              <p className="text-gray-300 text-sm leading-relaxed">
-                {room.world_module?.content?.overview || "世界已就绪，等待冒险者..."}
-              </p>
-              {room.world_module?.content?.factions?.length > 0 && (
-                <div className="text-sm text-gray-400">势力：{room.world_module.content.factions.join(" · ")}</div>
-              )}
-              {room.world_module?.content?.custom_rules?.length > 0 && (
-                <div className="text-sm text-amber-400/70">规则：{room.world_module.content.custom_rules.join("；")}</div>
+              {generatingWorld ? (
+                <p ref={worldGenRef} className="text-gray-300 text-sm leading-relaxed">
+                  <span className="inline-block w-1.5 h-4 bg-amber-400 animate-pulse" />
+                </p>
+              ) : (
+                <>
+                  <p className="text-gray-300 text-sm leading-relaxed">
+                    {room.world_module?.content?.overview || "世界已就绪，等待冒险者..."}
+                  </p>
+                  {room.world_module?.content?.factions?.length > 0 && (
+                    <div className="text-sm text-gray-400">势力：{room.world_module.content.factions.join(" · ")}</div>
+                  )}
+                  {room.world_module?.content?.custom_rules?.length > 0 && (
+                    <div className="text-sm text-amber-400/70">规则：{room.world_module.content.custom_rules.join("；")}</div>
+                  )}
+                </>
               )}
             </div>
           </div>
